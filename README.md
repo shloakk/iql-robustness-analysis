@@ -255,6 +255,8 @@ source scripts/hpc_aliases.sh    # load once per session
 | `lastlog` | Tail the latest output log |
 | `lasterr` | Tail the latest error log |
 | `clearlogs` | Delete all log files |
+| `cleanvenv` | Delete venv (run `iql-setup` to recreate) |
+| `cleanall` | Delete venv, tmp, and logs |
 | `gpunode` | Get an interactive GPU session |
 | `results` | List result CSVs |
 

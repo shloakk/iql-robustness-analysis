@@ -26,6 +26,10 @@ alias lasterr='ls -t logs/slurm_*.err 2>/dev/null | head -1 | xargs tail -f'
 alias alllogs='ls -lt logs/slurm_*.out 2>/dev/null | head -10'
 alias clearlogs='rm -f logs/slurm_*.out logs/slurm_*.err logs/*.out logs/*.err && echo "Logs cleared"'
 
+# ─── Cleanup ─────────────────────────────────────────────────────────
+alias cleanvenv='rm -rf venv && echo "venv deleted. Run iql-setup to recreate."'
+alias cleanall='rm -rf venv tmp logs/slurm_* && echo "Cleaned venv, tmp, and logs"'
+
 # ─── Results ─────────────────────────────────────────────────────────
 alias results='ls -la results/*.csv 2>/dev/null'
 alias checkpoints='ls -la tmp/*/checkpoint_* 2>/dev/null'
