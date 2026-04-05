@@ -12,21 +12,21 @@
 #
 # IQL Robustness Analysis — SJSU CoE HPC Experiment Runner
 #
-# FIRST TIME SETUP (run once on a GPU node via interactive session):
-#   srun -p gpu --gres=gpu -n 1 -N 1 -c 4 --mem=16G --time=01:00:00 --pty /bin/bash
+# FIRST TIME SETUP (run on the login node — has internet):
 #   bash scripts/run_all_hpc.sh setup
-#   exit
 #
-# Then submit experiments from the login node:
+# Then submit experiments:
 #   sbatch scripts/run_all_hpc.sh            # full pipeline
 #   sbatch scripts/run_all_hpc.sh train      # training only
 #   sbatch scripts/run_all_hpc.sh eval       # evaluation only
 #   sbatch scripts/run_all_hpc.sh analyze    # analysis only
 #
-# Setup must run on a GPU node (not the login node) because the login
-# node has GLIBC 2.17 which is too old for numpy/scipy/JAX wheels.
-# GPU nodes have newer GLIBC and GCC. The /home directory is shared
-# across all nodes, so the venv created on a GPU node works everywhere.
+# SJSU HPC notes:
+#   - Login node: GLIBC 2.17 (CentOS 7), has internet, no GCC
+#   - GPU nodes:  GLIBC 2.17, no internet, have GPU
+#   - /home is shared across all nodes
+#   - Setup downloads pre-built wheels on login node (no compilation)
+#   - Batch jobs use the venv created during setup
 
 set -euo pipefail
 
@@ -83,23 +83,17 @@ activate_env() {
 }
 
 # ─────────────────────────────────────────────────────────────────────
-# STEP 0: One-time setup (run on login node — needs internet)
+# STEP 0: One-time setup (run on LOGIN NODE — has internet)
 # ─────────────────────────────────────────────────────────────────────
 setup_environment() {
     echo ""
     echo ">>> One-time environment setup"
-    echo ">>> Run this on a GPU NODE (interactive session), not the login node."
-    echo ">>> The login node has GLIBC 2.17 which is too old for pip wheels."
-    echo ""
-    echo ">>> If you're on the login node, first get a GPU node:"
-    echo ">>>   srun -p gpu --gres=gpu -n 1 -N 1 -c 4 --mem=16G --time=01:00:00 --pty /bin/bash"
+    echo ">>> Run this on the LOGIN NODE (has internet access)"
     echo ""
 
     module load python3 2>/dev/null || true
-    module load cuda 2>/dev/null || true
 
     echo "Python: $(python3 --version 2>&1)"
-    echo "GLIBC:  $(ldd --version 2>&1 | head -1)"
     echo "Node:   $(hostname)"
     echo ""
 
@@ -112,27 +106,38 @@ setup_environment() {
     source "${VENV_DIR}/bin/activate"
     echo "Activated venv: $(which python)"
 
-    # Upgrade pip
-    pip install --upgrade pip setuptools wheel
-
-    # Install all dependencies (GPU nodes have proper GLIBC and GCC)
-    echo ""
-    echo "Installing JAX and dependencies..."
-    pip install numpy scipy h5py
-    pip install jax jaxlib flax optax
+    # CRITICAL: upgrade pip first. The system pip (23.2.1) may not
+    # properly handle --only-binary and manylinux2014 wheel resolution.
+    echo "Upgrading pip..."
+    python -m pip install --upgrade pip
 
     echo ""
-    echo "Installing MuJoCo and Gymnasium..."
-    pip install mujoco "gymnasium[mujoco]"
-    pip install gym 2>/dev/null || true
-
+    echo "Installing all packages with --only-binary=:all: to avoid"
+    echo "any C compilation (login node has no GCC)."
     echo ""
-    echo "Installing other dependencies..."
-    pip install tqdm matplotlib
-    pip install absl-py ml_collections tensorboardX
-    pip install tensorflow-probability 2>/dev/null || \
-        echo "WARNING: tensorflow-probability install had issues"
 
+    # Install everything using ONLY pre-built binary wheels.
+    # numpy 2.x, scipy, h5py, jax, etc. all publish manylinux2014
+    # (GLIBC 2.17) wheels for Python 3.11 on x86_64.
+    pip install --only-binary=:all: \
+        numpy scipy h5py matplotlib \
+        jax jaxlib flax optax ml_dtypes \
+        mujoco gymnasium
+
+    # Pure Python packages (no binary needed)
+    pip install tqdm absl-py ml_collections tensorboardX
+
+    # These may or may not have manylinux2014 wheels — try binary first
+    pip install --only-binary=:all: tensorflow-probability 2>/dev/null || \
+        pip install tensorflow-probability 2>/dev/null || \
+        echo "WARNING: tensorflow-probability not installed (optional)"
+
+    # gym (legacy, may need source build — skip if it fails)
+    pip install --only-binary=:all: gym 2>/dev/null || \
+        pip install gym 2>/dev/null || \
+        echo "WARNING: gym not installed (gymnasium is the primary dep)"
+
+    # D4RL (builds from git — may need compilation, skip if fails)
     echo ""
     echo "Installing D4RL..."
     pip install git+https://github.com/Farama-Foundation/d4rl@master 2>/dev/null || \
@@ -145,9 +150,13 @@ setup_environment() {
 import sys
 print(f'Python:     {sys.version.split()[0]}')
 try:
+    import numpy; print(f'NumPy:      {numpy.__version__}')
+except Exception as e:
+    print(f'NumPy:      FAILED - {e}')
+try:
     import jax; print(f'JAX:        {jax.__version__}')
 except Exception as e:
-    print(f'JAX:        import error (may work on GPU node): {e}')
+    print(f'JAX:        {e}')
 try:
     import flax; print(f'Flax:       {flax.__version__}')
 except Exception as e:
@@ -160,6 +169,8 @@ try:
     import mujoco; print(f'MuJoCo:     {mujoco.__version__}')
 except Exception as e:
     print(f'MuJoCo:     {e}')
+print()
+print('Setup complete.')
 "
 
     echo ""
