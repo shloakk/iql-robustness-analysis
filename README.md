@@ -234,6 +234,29 @@ HPC partitions: `gpu` (P100/A100/H100, 48h max), `compute` (CPU only, 24h max),
 `condo` (preemptible). The script defaults to the `gpu` partition with a 24h
 time limit, which is sufficient for the full pipeline.
 
+A convenience alias file is provided for common HPC commands:
+
+```bash
+source scripts/hpc_aliases.sh    # load once per session
+# or add to ~/.bashrc for permanent use:
+# echo 'source ~/iql-robustness-analysis/scripts/hpc_aliases.sh' >> ~/.bashrc
+```
+
+| Alias | Command |
+|---|---|
+| `jobs` | Check your job status |
+| `myjobs` | Detailed job listing |
+| `killall` | Cancel all your jobs |
+| `iql-setup` | One-time environment setup |
+| `iql-run` | Submit full pipeline |
+| `iql-train` | Submit training only |
+| `iql-eval` | Submit evaluation only |
+| `iql-analyze` | Submit analysis only |
+| `lastlog` | Tail the latest output log |
+| `lasterr` | Tail the latest error log |
+| `gpunode` | Get an interactive GPU session |
+| `results` | List result CSVs |
+
 ### On Google Colab
 
 Run the notebooks in order: `01_train_baseline.ipynb` → `02_train_ensemble.ipynb` → `03_evaluate_shift.ipynb` → `04_analyze_results.ipynb`
