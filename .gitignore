@@ -1,10 +1,12 @@
 
 __pycache__/
 __pypackages__/
+-e .idea/
 .cache
 .coverage
 .coverage.*
 .dmypy.json
+.DS_Store
 .eggs/
 .env
 .hypothesis/
