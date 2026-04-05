@@ -47,7 +47,6 @@ class EpisodeMonitor(gym.ActionWrapper):
     def reset(self, **kwargs):
         self._reset_stats()
         result = self.env.reset(**kwargs)
-        # gymnasium reset() returns (obs, info), gym returns just obs
-        if isinstance(result, tuple):
-            return result[0]
+        # Pass through whatever the underlying env returns
+        # (gymnasium returns (obs, info), gym returns just obs)
         return result
