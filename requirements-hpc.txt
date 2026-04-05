@@ -1,0 +1,34 @@
+# Pinned dependencies for SJSU CoE HPC (GLIBC 2.17, Python 3.11)
+# All packages have manylinux2014 wheels — no compilation needed.
+#
+# Install with: pip install --only-binary=:all: -r requirements-hpc.txt
+
+# JAX ecosystem (pinned for tensorflow-probability compatibility)
+jax==0.4.35
+jaxlib==0.4.35
+ml_dtypes==0.4.1
+flax==0.8.5
+optax==0.2.3
+
+# Numerical
+numpy==1.26.4
+scipy==1.13.1
+h5py==3.11.0
+
+# MuJoCo / Gym
+mujoco==3.1.6
+gymnasium==0.29.1
+gym==0.23.1
+
+# D4RL (install separately with --no-deps after this file)
+# pip install --no-deps git+https://github.com/Farama-Foundation/d4rl@master
+
+# ML utilities
+tensorflow-probability==0.23.0
+absl-py==2.1.0
+ml_collections==0.1.1
+tensorboardX==2.6.2.2
+
+# General
+tqdm==4.66.5
+matplotlib==3.9.2

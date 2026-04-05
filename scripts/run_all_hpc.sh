@@ -109,87 +109,34 @@ setup_environment() {
     # CRITICAL: upgrade pip first. The system pip (23.2.1) may not
     # properly handle --only-binary and manylinux2014 wheel resolution.
     echo "Upgrading pip..."
-    python -m pip install --upgrade pip
+    python -m pip install --upgrade pip setuptools wheel
 
     echo ""
-    echo "Installing all packages with --only-binary=:all: to avoid"
-    echo "any C compilation (login node has no GCC)."
+    echo "Installing pinned dependencies from requirements-hpc.txt..."
+    echo "(all packages use pre-built wheels — no compilation needed)"
     echo ""
 
-    # Install everything using ONLY pre-built binary wheels.
-    # numpy 2.x, scipy, h5py, jax, etc. all publish manylinux2014
-    # (GLIBC 2.17) wheels for Python 3.11 on x86_64.
-    #
-    # Version pinning: tensorflow-probability requires JAX < 0.5.0
-    # (jax.interpreters.xla was removed in JAX 0.7.0).
-    # JAX 0.4.35 is the last release before the 0.5.x series.
-    pip install --only-binary=:all: \
-        numpy scipy h5py matplotlib \
-        "jax[cuda12]==0.4.35" "jaxlib==0.4.35" \
-        flax optax ml_dtypes \
-        mujoco gymnasium 2>/dev/null || \
-    pip install --only-binary=:all: \
-        numpy scipy h5py matplotlib \
-        "jax==0.4.35" "jaxlib==0.4.35" \
-        flax optax ml_dtypes \
-        mujoco gymnasium
-
-    # Pure Python packages (no binary needed)
-    pip install tqdm absl-py ml_collections tensorboardX
-
-    # tensorflow-probability (JAX substrate for policy distributions)
-    pip install --only-binary=:all: tensorflow-probability 2>/dev/null || \
-        pip install tensorflow-probability 2>/dev/null || \
-        echo "WARNING: tensorflow-probability not installed"
-
-    # gym (legacy API, needed by D4RL)
-    pip install "gym==0.23.1" 2>/dev/null || \
-        pip install gym 2>/dev/null || \
-        echo "WARNING: gym not installed"
+    # Install all pinned deps as binary wheels
+    pip install --only-binary=:all: -r requirements-hpc.txt
 
     # D4RL — install without its heavy deps (mujoco-py, etc.)
-    # We already have mujoco and gymnasium installed above.
+    # We already have mujoco, gymnasium, and gym installed above.
     echo ""
-    echo "Installing D4RL..."
+    echo "Installing D4RL (no-deps to avoid mujoco-py compilation)..."
     pip install --no-deps git+https://github.com/Farama-Foundation/d4rl@master 2>/dev/null || \
         pip install --no-deps d4rl 2>/dev/null || \
-        echo "WARNING: D4RL install failed — see troubleshooting below"
+        echo "WARNING: D4RL install failed"
 
-    # Verify
+    # Run full verification
     echo ""
-    echo "Verifying installation..."
-    python -c "
-import sys
-print(f'Python:     {sys.version.split()[0]}')
-try:
-    import numpy; print(f'NumPy:      {numpy.__version__}')
-except Exception as e:
-    print(f'NumPy:      FAILED - {e}')
-try:
-    import jax; print(f'JAX:        {jax.__version__}')
-except Exception as e:
-    print(f'JAX:        {e}')
-try:
-    import flax; print(f'Flax:       {flax.__version__}')
-except Exception as e:
-    print(f'Flax:       {e}')
-try:
-    import gymnasium; print(f'Gymnasium:  {gymnasium.__version__}')
-except Exception as e:
-    print(f'Gymnasium:  {e}')
-try:
-    import mujoco; print(f'MuJoCo:     {mujoco.__version__}')
-except Exception as e:
-    print(f'MuJoCo:     {e}')
-print()
-print('Setup complete.')
-"
+    echo "Running verification..."
+    python scripts/verify_env.py
 
     echo ""
     echo "============================================"
-    echo "Setup complete. Submit experiments with:"
-    echo "  sbatch scripts/run_all_hpc.sh"
-    echo "  sbatch scripts/run_all_hpc.sh train"
+    echo "Setup complete. Next steps:"
+    echo "  python scripts/verify_env.py   # re-verify anytime"
+    echo "  sbatch scripts/run_all_hpc.sh  # submit full pipeline"
     echo "============================================"
 }
 
