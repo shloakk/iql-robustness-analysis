@@ -113,15 +113,26 @@ setup_environment() {
 
     echo ""
     echo "Installing pinned dependencies from requirements-hpc.txt..."
-    echo "(all packages use pre-built wheels — no compilation needed)"
     echo ""
 
-    # Install all pinned deps as binary wheels
-    pip install --only-binary=:all: -r requirements-hpc.txt
+    # First install C-extension packages with --only-binary to prevent
+    # compilation (login node has no GCC). These all have manylinux2014 wheels.
+    pip install --only-binary=:all: \
+        numpy==1.26.4 scipy==1.13.1 h5py==3.11.0 \
+        jax==0.4.35 jaxlib==0.4.35 ml_dtypes==0.4.1 \
+        mujoco==3.1.6 matplotlib==3.9.2
 
-    # gym is pure Python but not in requirements-hpc.txt (--only-binary blocks it)
+    # Then install the rest normally (pure Python packages)
+    pip install \
+        flax==0.8.5 optax==0.2.3 \
+        gymnasium==0.29.1 \
+        tensorflow-probability==0.23.0 \
+        absl-py==2.1.0 ml_collections==0.1.1 \
+        tensorboardX==2.6.2.2 tqdm==4.66.5
+
+    # gym (legacy, needed by D4RL)
     echo ""
-    echo "Installing gym (needed by D4RL)..."
+    echo "Installing gym..."
     pip install "gym==0.23.1" 2>/dev/null || pip install gym 2>/dev/null || true
 
     # D4RL — install without its heavy deps (mujoco-py, etc.)
