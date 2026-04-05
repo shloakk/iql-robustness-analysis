@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Evaluate a trained IQL agent under controlled distribution shift.
 
 Supports 4 shift types: gravity, obs_noise, friction, reward_perturb.
@@ -89,7 +90,7 @@ def make_shifted_env(env_name, shift_type, shift_level, seed):
 
 
 def compute_robustness_drop(baseline_score, shifted_score):
-    """Δ(δ) = (J(π, E_0) - J(π, E_δ)) / J(π, E_0)"""
+    """Delta(d) = (J(pi, E_0) - J(pi, E_d)) / J(pi, E_0)"""
     if baseline_score == 0:
         return float('inf') if shifted_score != 0 else 0.0
     return (baseline_score - shifted_score) / abs(baseline_score)
@@ -202,7 +203,7 @@ def main(_):
     print(f"\n{'='*60}")
     print(f"SUMMARY — {FLAGS.env_name} ({critic_label})")
     print(f"{'='*60}")
-    print(f"{'Shift Type':<18} {'Level':<10} {'Return':<12} {'Δ(δ)':<10}")
+    print(f"{'Shift Type':<18} {'Level':<10} {'Return':<12} {'Drop':<10}")
     print(f"{'-'*50}")
     for r in all_results:
         print(f"{r['shift_type']:<18} {r['shift_level']:<10.2f} "

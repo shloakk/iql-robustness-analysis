@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Compute robustness metrics from shift evaluation results.
 
 Usage:
@@ -76,7 +77,7 @@ def main(_):
             for r in sorted([r for r in results if r['shift_type'] == st],
                            key=lambda x: x['shift_level']):
                 print(f"    {r['shift_level']:<8.2f} return={r['raw_return']:<10.2f} "
-                      f"Δ(δ)={r['robustness_drop']:<8.4f}")
+                      f"drop={r['robustness_drop']:<8.4f}")
 
     if len(all_configs) > 1:
         print(f"\n{'='*70}")

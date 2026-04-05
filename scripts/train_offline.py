@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Train IQL offline on D4RL datasets.
 
 Usage:
