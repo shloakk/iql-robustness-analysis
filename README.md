@@ -203,8 +203,9 @@ ssh <sjsu_id>@coe-hpc.sjsu.edu
 git clone -b sp1ffygeek_check_3 https://github.com/shloakk/iql-robustness-analysis.git
 cd iql-robustness-analysis
 
-# 3. One-time setup (run on login node — needs internet for pip install)
+# 3. One-time setup (run on login node — installs Miniconda + deps)
 bash scripts/run_all_hpc.sh setup
+# If prompted, log out and back in to activate conda, then re-run setup.
 
 # 4. Submit experiments to GPU nodes
 mkdir -p logs
@@ -219,9 +220,10 @@ squeue -u $USER                        # check job status
 tail -f logs/slurm_<job_id>.out        # watch output
 ```
 
-The setup step creates a Python virtual environment using the system `python3`
-module and installs all dependencies via pip. This only needs to be done once.
-Subsequent `sbatch` jobs activate the existing venv automatically.
+The setup step installs Miniconda in your home directory (if not already
+present), creates a conda environment with Python 3.11, and installs all
+dependencies. This only needs to be done once — the `/home` directory is
+shared across all HPC nodes, so batch jobs can activate the same conda env.
 
 The batch job runs sequentially within a single SLURM allocation:
 - **Phase 1:** Training — 6 runs (3 envs x 2 critic configs), ~20 min each
