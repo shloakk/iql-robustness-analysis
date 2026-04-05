@@ -191,37 +191,39 @@ iql-robustness-analysis/
 ### On SJSU CoE HPC (recommended)
 
 The SJSU College of Engineering HPC uses SLURM for job scheduling. Connect via
-VPN if off-campus, then SSH in. The script is self-contained and will install
-Miniconda and all dependencies automatically if they are not already present.
+VPN if off-campus, then SSH in. Setup is a two-step process: install
+dependencies once on the login node (which has internet access), then submit
+batch jobs to GPU nodes.
 
 ```bash
 # 1. SSH in (use coe-hpc1 if coe-hpc times out over VPN)
 ssh <sjsu_id>@coe-hpc.sjsu.edu
 
-# 2. Clone and submit
+# 2. Clone the repo
 git clone -b sp1ffygeek_check_3 https://github.com/shloakk/iql-robustness-analysis.git
 cd iql-robustness-analysis
+
+# 3. One-time setup (run on login node — needs internet for pip install)
+bash scripts/run_all_hpc.sh setup
+
+# 4. Submit experiments to GPU nodes
 mkdir -p logs
 sbatch scripts/run_all_hpc.sh          # full pipeline
 # or run individual steps:
-# sbatch scripts/run_all_hpc.sh setup    # env setup only
 # sbatch scripts/run_all_hpc.sh train    # training only
 # sbatch scripts/run_all_hpc.sh eval     # shift evaluation only
 # sbatch scripts/run_all_hpc.sh analyze  # compute metrics only
 
-# 3. Monitor
+# 5. Monitor
 squeue -u $USER                        # check job status
 tail -f logs/slurm_<job_id>.out        # watch output
 ```
 
-For interactive testing (useful for debugging before submitting a batch job):
+The setup step creates a Python virtual environment using the system `python3`
+module and installs all dependencies via pip. This only needs to be done once.
+Subsequent `sbatch` jobs activate the existing venv automatically.
 
-```bash
-srun -p gpu --gres=gpu -n 1 -N 1 -c 4 --pty /bin/bash
-bash scripts/run_all_hpc.sh setup      # set up env interactively
-```
-
-The script runs sequentially within a single SLURM job:
+The batch job runs sequentially within a single SLURM allocation:
 - **Phase 1:** Training — 6 runs (3 envs x 2 critic configs), ~20 min each
 - **Phase 2:** Shift evaluation — 6 runs (all 4 shift types per model)
 - **Phase 3:** Expectile tau ablation — 9 runs (3 envs x 3 tau values)

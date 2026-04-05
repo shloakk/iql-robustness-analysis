@@ -12,37 +12,24 @@
 #
 # IQL Robustness Analysis — SJSU CoE HPC Experiment Runner
 #
-# Self-contained script that handles environment setup, training,
-# evaluation under distribution shift, and analysis.
-#
-# Submit from the project root:
-#   mkdir -p logs
-#   sbatch scripts/run_all_hpc.sh            # run everything
-#   sbatch scripts/run_all_hpc.sh setup       # env setup only
-#   sbatch scripts/run_all_hpc.sh train       # training only
-#   sbatch scripts/run_all_hpc.sh eval        # evaluation only
-#   sbatch scripts/run_all_hpc.sh analyze     # analysis only
-#   sbatch scripts/run_all_hpc.sh all         # full pipeline (default)
-#
-# For interactive testing:
-#   srun -p gpu --gres=gpu -n 1 -N 1 -c 4 --pty /bin/bash
+# FIRST TIME SETUP (run once on the login node, NOT as a batch job):
 #   bash scripts/run_all_hpc.sh setup
+#
+# Then submit experiments:
+#   sbatch scripts/run_all_hpc.sh            # full pipeline
+#   sbatch scripts/run_all_hpc.sh train      # training only
+#   sbatch scripts/run_all_hpc.sh eval       # evaluation only
+#   sbatch scripts/run_all_hpc.sh analyze    # analysis only
 #
 # SJSU CoE HPC reference:
 #   https://www.sjsu.edu/cmpe/resources/hpc.php
-#   Partitions: compute (CPU, 24h max), gpu (P100/A100/H100, 48h max),
-#               condo (preemptible, 2 day max)
-#   GPU request: --gres=gpu (not --gres=gpu:1)
-#   Modules: python3, cuda/10.0, singularity
-#   Anaconda: user-installed in ~/anaconda3
+#   Partitions: compute (CPU, 24h), gpu (P100/A100/H100, 48h), condo (2d)
 
 set -euo pipefail
 
 # ─────────────────────────────────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────────────────────────────────
-ENV_NAME="iql"
-PYTHON_VERSION="3.11"
 ENVIRONMENTS="hopper-medium-v2 halfcheetah-medium-v2 walker2d-medium-v2"
 CRITIC_CONFIGS="2 3"
 MAX_STEPS=300000
@@ -73,69 +60,94 @@ echo "Date:        $(date)"
 echo "============================================"
 
 # ─────────────────────────────────────────────────────────────────────
-# STEP 1: Environment setup
+# ENVIRONMENT ACTIVATION
 # ─────────────────────────────────────────────────────────────────────
-setup_environment() {
-    echo ""
-    echo ">>> Setting up environment..."
-
-    # Load available HPC modules
+activate_env() {
+    # Load HPC modules
     module load python3 2>/dev/null || true
     module load cuda 2>/dev/null || true
 
-    # Initialize conda. On SJSU HPC, Anaconda is user-installed
-    # (typically at ~/anaconda3). If conda is not found, we install
-    # Miniconda into ~/miniconda3.
-    if ! command -v conda &>/dev/null; then
-        # Check common install locations
-        for CONDA_DIR in ~/anaconda3 ~/miniconda3; do
-            if [ -f "${CONDA_DIR}/etc/profile.d/conda.sh" ]; then
-                source "${CONDA_DIR}/etc/profile.d/conda.sh"
-                break
-            fi
-        done
+    # Activate the venv created during setup
+    if [ -f "${PROJECT_DIR}/venv/bin/activate" ]; then
+        source "${PROJECT_DIR}/venv/bin/activate"
+        echo "Activated venv at ${PROJECT_DIR}/venv"
+    else
+        echo "ERROR: Virtual environment not found at ${PROJECT_DIR}/venv"
+        echo ""
+        echo "Run setup first (on the login node, not as a batch job):"
+        echo "  bash scripts/run_all_hpc.sh setup"
+        exit 1
     fi
 
-    if ! command -v conda &>/dev/null; then
-        echo "Conda not found. Installing Miniconda..."
-        wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \
-            -O /tmp/miniconda.sh
-        bash /tmp/miniconda.sh -b -p ~/miniconda3
-        rm /tmp/miniconda.sh
-        source ~/miniconda3/etc/profile.d/conda.sh
-        echo "Miniconda installed at ~/miniconda3"
+    python --version
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# STEP 0: One-time setup (run on login node, has internet access)
+# ─────────────────────────────────────────────────────────────────────
+setup_environment() {
+    echo ""
+    echo ">>> One-time environment setup"
+    echo ">>> This should be run on the LOGIN NODE (not as sbatch)"
+    echo ""
+
+    # Load system Python 3
+    module load python3 2>/dev/null || true
+
+    # Check Python version
+    PYVER=$(python3 --version 2>&1 || python --version 2>&1)
+    echo "System Python: $PYVER"
+
+    # Create a venv in the project directory
+    if [ ! -d "${PROJECT_DIR}/venv" ]; then
+        echo "Creating virtual environment..."
+        python3 -m venv "${PROJECT_DIR}/venv" || python -m venv "${PROJECT_DIR}/venv"
     fi
 
-    # Create conda env if it doesn't exist
-    if ! conda env list | grep -q "^${ENV_NAME} "; then
-        echo "Creating conda environment: ${ENV_NAME} (python ${PYTHON_VERSION})"
-        conda create -n "${ENV_NAME}" python="${PYTHON_VERSION}" -y
-    fi
+    source "${PROJECT_DIR}/venv/bin/activate"
+    echo "Activated venv: $(which python)"
+    echo "Python version: $(python --version)"
 
-    # Activate — try conda activate first, fall back to source activate
-    conda activate "${ENV_NAME}" 2>/dev/null || source activate "${ENV_NAME}"
-
-    # Install dependencies (pip skips already-installed packages)
-    echo "Installing Python dependencies..."
+    # Upgrade pip
     pip install --quiet --upgrade pip
+
+    # Install JAX and ML dependencies
+    echo "Installing JAX and dependencies..."
     pip install --quiet jax jaxlib flax optax
     pip install --quiet mujoco "gymnasium[mujoco]" gym
     pip install --quiet h5py tqdm matplotlib numpy scipy
     pip install --quiet absl-py ml_collections tensorboardX tensorflow-probability
-    pip install --quiet git+https://github.com/Farama-Foundation/d4rl@master 2>/dev/null || true
+
+    # D4RL (may fail on some systems, that's ok — we retry at runtime)
+    echo "Installing D4RL..."
+    pip install --quiet git+https://github.com/Farama-Foundation/d4rl@master 2>/dev/null || \
+        echo "WARNING: D4RL install failed. Will retry on GPU node."
 
     # Verify
     python -c "
-import jax
-print(f'Python:  {__import__(\"sys\").version.split()[0]}')
-print(f'JAX:     {jax.__version__}')
-print(f'Devices: {jax.devices()}')
+import sys
+print(f'Python:  {sys.version.split()[0]}')
+try:
+    import jax
+    print(f'JAX:     {jax.__version__}')
+    print(f'Devices: {jax.devices()}')
+except Exception as e:
+    print(f'JAX:     not available on login node (expected): {e}')
+try:
+    import gymnasium
+    print(f'Gymnasium: {gymnasium.__version__}')
+except:
+    print('Gymnasium: not installed')
 "
-    echo "Environment ready."
+
+    echo ""
+    echo "Setup complete. Now submit a batch job:"
+    echo "  sbatch scripts/run_all_hpc.sh"
+    echo "  sbatch scripts/run_all_hpc.sh train"
 }
 
 # ─────────────────────────────────────────────────────────────────────
-# STEP 2: Training (3 envs x 2 critic configs = 6 runs)
+# STEP 1: Training (3 envs x 2 critic configs = 6 runs)
 # ─────────────────────────────────────────────────────────────────────
 run_training() {
     echo ""
@@ -166,7 +178,7 @@ run_training() {
 }
 
 # ─────────────────────────────────────────────────────────────────────
-# STEP 3: Shift evaluation (all 4 shift types per model)
+# STEP 2: Shift evaluation (all 4 shift types per model)
 # ─────────────────────────────────────────────────────────────────────
 run_evaluation() {
     echo ""
@@ -196,7 +208,7 @@ run_evaluation() {
 }
 
 # ─────────────────────────────────────────────────────────────────────
-# STEP 4: Expectile tau ablation (2Q only, 3 tau values)
+# STEP 3: Expectile tau ablation (2Q only, 3 tau values)
 # ─────────────────────────────────────────────────────────────────────
 run_ablation() {
     echo ""
@@ -239,7 +251,7 @@ run_ablation() {
 }
 
 # ─────────────────────────────────────────────────────────────────────
-# STEP 5: Analysis (compute robustness metrics, no GPU needed)
+# STEP 4: Analysis (compute robustness metrics)
 # ─────────────────────────────────────────────────────────────────────
 run_analysis() {
     echo ""
@@ -267,30 +279,36 @@ case "$MODE" in
         setup_environment
         ;;
     train)
-        setup_environment
+        activate_env
         run_training
         ;;
     eval)
-        setup_environment
+        activate_env
         run_evaluation
         ;;
     ablation)
-        setup_environment
+        activate_env
         run_ablation
         ;;
     analyze)
-        setup_environment
+        activate_env
         run_analysis
         ;;
     all)
-        setup_environment
+        activate_env
         run_training
         run_evaluation
         run_ablation
         run_analysis
         ;;
     *)
-        echo "Usage: sbatch scripts/run_all_hpc.sh [setup|train|eval|ablation|analyze|all]"
+        echo "Usage:"
+        echo "  First time:  bash scripts/run_all_hpc.sh setup    (on login node)"
+        echo "  Then:        sbatch scripts/run_all_hpc.sh         (full pipeline)"
+        echo "               sbatch scripts/run_all_hpc.sh train"
+        echo "               sbatch scripts/run_all_hpc.sh eval"
+        echo "               sbatch scripts/run_all_hpc.sh ablation"
+        echo "               sbatch scripts/run_all_hpc.sh analyze"
         exit 1
         ;;
 esac
