@@ -1,10 +1,43 @@
 import collections
+import os
 from typing import Optional
 
-import d4rl
-import gym
 import numpy as np
 from tqdm import tqdm
+
+# Suppress D4RL import warnings for envs we don't use
+os.environ.setdefault('D4RL_SUPPRESS_IMPORT_ERROR', '1')
+
+try:
+    import d4rl
+    import gym
+    _HAS_D4RL = True
+except ImportError:
+    _HAS_D4RL = False
+
+try:
+    import gymnasium
+    _HAS_GYMNASIUM = True
+except ImportError:
+    _HAS_GYMNASIUM = False
+
+
+# D4RL env names -> gymnasium MuJoCo env names
+_D4RL_TO_GYMNASIUM = {
+    'hopper': 'Hopper-v4',
+    'halfcheetah': 'HalfCheetah-v4',
+    'walker2d': 'Walker2d-v4',
+    'ant': 'Ant-v4',
+}
+
+
+def d4rl_to_gymnasium_name(d4rl_name):
+    """Convert D4RL env name to gymnasium MuJoCo env name.
+
+    e.g., 'hopper-medium-v2' -> 'Hopper-v4'
+    """
+    base = d4rl_name.split('-')[0]
+    return _D4RL_TO_GYMNASIUM.get(base, d4rl_name)
 
 Batch = collections.namedtuple(
     'Batch',
@@ -68,12 +101,64 @@ class Dataset(object):
                      next_observations=self.next_observations[indx])
 
 
+def _load_d4rl_dataset(env_or_name):
+    """Load a D4RL dataset, handling both gym.Env and string env names."""
+    if _HAS_D4RL:
+        try:
+            # Try the standard D4RL API first
+            if hasattr(env_or_name, 'get_dataset'):
+                return d4rl.qlearning_dataset(env_or_name)
+            else:
+                # Create a minimal env just for dataset loading
+                env = gym.make(env_or_name)
+                ds = d4rl.qlearning_dataset(env)
+                env.close()
+                return ds
+        except Exception:
+            pass
+
+    # Fallback: download the HDF5 file directly from D4RL URLs
+    import h5py
+    import urllib.request
+    import tempfile
+
+    # D4RL dataset URLs follow this pattern
+    name = env_or_name if isinstance(env_or_name, str) else env_or_name.spec.id
+    url = f"http://rail.eecs.berkeley.edu/datasets/offline_rl/gym_mujoco_v2/{name}.hdf5"
+
+    cache_dir = os.path.join(os.path.expanduser('~'), '.d4rl', 'datasets')
+    os.makedirs(cache_dir, exist_ok=True)
+    cache_path = os.path.join(cache_dir, f"{name}.hdf5")
+
+    if not os.path.exists(cache_path):
+        print(f"Downloading D4RL dataset: {name} ...")
+        urllib.request.urlretrieve(url, cache_path)
+        print(f"Saved to {cache_path}")
+
+    with h5py.File(cache_path, 'r') as f:
+        dataset = {
+            'observations': f['observations'][:],
+            'actions': f['actions'][:],
+            'rewards': f['rewards'][:],
+            'terminals': f['terminals'][:],
+            'next_observations': f['observations'][1:],
+        }
+        # next_observations needs special handling for terminal states
+        # Append the last observation to match array lengths
+        dataset['next_observations'] = np.concatenate([
+            dataset['next_observations'],
+            dataset['observations'][-1:],
+        ], axis=0)
+
+    return dataset
+
+
 class D4RLDataset(Dataset):
     def __init__(self,
-                 env: gym.Env,
+                 env_or_name,
                  clip_to_eps: bool = True,
                  eps: float = 1e-5):
-        dataset = d4rl.qlearning_dataset(env)
+        dataset = _load_d4rl_dataset(env_or_name)
 
         if clip_to_eps:
             lim = 1 - eps

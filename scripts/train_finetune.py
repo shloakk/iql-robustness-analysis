@@ -12,7 +12,7 @@ from typing import Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import gym
+import gymnasium as gym
 import numpy as np
 import tqdm
 from absl import app, flags
@@ -72,7 +72,7 @@ def make_env_and_dataset(env_name: str,
     env = gym.make(env_name)
     env = wrappers.EpisodeMonitor(env)
     env = wrappers.SinglePrecision(env)
-    env.seed(seed)
+    env.reset(seed=seed)
     env.action_space.seed(seed)
     env.observation_space.seed(seed)
 

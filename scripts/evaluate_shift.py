@@ -22,7 +22,7 @@ from typing import Dict, List
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import gym
+import gymnasium as gym
 import numpy as np
 from absl import app, flags
 from ml_collections import config_flags
@@ -70,7 +70,9 @@ BASELINE_LEVELS = {
 
 def make_shifted_env(env_name, shift_type, shift_level, seed):
     """Create an environment with distribution shift applied."""
-    env = gym.make(env_name)
+    from iql.dataset_utils import d4rl_to_gymnasium_name
+    gym_env_name = d4rl_to_gymnasium_name(env_name)
+    env = gym.make(gym_env_name)
 
     if shift_type == 'gravity':
         env = wrappers.GravityShift(env, gravity_scale=shift_level)
@@ -83,7 +85,7 @@ def make_shifted_env(env_name, shift_type, shift_level, seed):
 
     env = wrappers.EpisodeMonitor(env)
     env = wrappers.SinglePrecision(env)
-    env.seed(seed)
+    env.reset(seed=seed)
     env.action_space.seed(seed)
     env.observation_space.seed(seed)
     return env
@@ -125,10 +127,12 @@ def main(_):
         shift_types = [FLAGS.shift_type]
 
     # Create base environment for agent initialization
-    env = gym.make(FLAGS.env_name)
+    from iql.dataset_utils import d4rl_to_gymnasium_name
+    gym_env_name = d4rl_to_gymnasium_name(FLAGS.env_name)
+    env = gym.make(gym_env_name)
     env = wrappers.EpisodeMonitor(env)
     env = wrappers.SinglePrecision(env)
-    env.seed(FLAGS.seed)
+    env.reset(seed=FLAGS.seed)
 
     # Initialize agent
     kwargs = dict(FLAGS.config)

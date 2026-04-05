@@ -8,7 +8,7 @@ Usage:
     env = FrictionShift(env, friction_scale=2.0)  # 2x friction
 """
 
-import gym
+import gymnasium as gym
 import numpy as np
 
 

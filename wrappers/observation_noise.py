@@ -8,7 +8,7 @@ Usage:
     env = ObservationNoise(env, noise_std=0.1)
 """
 
-import gym
+import gymnasium as gym
 import numpy as np
 
 

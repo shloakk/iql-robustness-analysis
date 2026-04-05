@@ -8,7 +8,7 @@ Usage:
     env = RewardPerturbation(env, noise_std=0.1, scale=1.0)
 """
 
-import gym
+import gymnasium as gym
 import numpy as np
 
 from wrappers.common import TimeStep

@@ -15,7 +15,7 @@ from typing import Tuple
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import gym
+import gymnasium as gym
 import numpy as np
 import tqdm
 from absl import app, flags
@@ -23,7 +23,7 @@ from ml_collections import config_flags
 from tensorboardX import SummaryWriter
 
 import wrappers
-from iql.dataset_utils import D4RLDataset, split_into_trajectories
+from iql.dataset_utils import D4RLDataset, split_into_trajectories, d4rl_to_gymnasium_name
 from evaluation import evaluate
 from iql import Learner
 
@@ -69,14 +69,18 @@ def normalize(dataset):
 
 def make_env_and_dataset(env_name: str,
                          seed: int) -> Tuple[gym.Env, D4RLDataset]:
-    env = gym.make(env_name)
+    gym_env_name = d4rl_to_gymnasium_name(env_name)
+    env = gym.make(gym_env_name)
     env = wrappers.EpisodeMonitor(env)
     env = wrappers.SinglePrecision(env)
-    env.seed(seed)
+
+    # gymnasium uses reset(seed=) instead of env.seed()
+    env.reset(seed=seed)
     env.action_space.seed(seed)
     env.observation_space.seed(seed)
 
-    dataset = D4RLDataset(env)
+    # Load D4RL dataset by name (doesn't need mujoco_py)
+    dataset = D4RLDataset(env_name)
 
     if 'antmaze' in FLAGS.env_name:
         dataset.rewards -= 1.0

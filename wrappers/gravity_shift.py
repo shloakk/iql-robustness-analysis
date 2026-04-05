@@ -8,7 +8,7 @@ Usage:
     env = GravityShift(env, gravity_scale=2.0)  # 2x gravity
 """
 
-import gym
+import gymnasium as gym
 import numpy as np
 
 
