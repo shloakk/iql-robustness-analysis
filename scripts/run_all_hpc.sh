@@ -107,28 +107,43 @@ setup_environment() {
     # Upgrade pip and install wheel/setuptools
     pip install --upgrade pip setuptools wheel
 
-    # Install packages using only pre-built binary wheels where possible.
-    # This avoids C compilation issues on the login node (old GLIBC).
+    # The login node runs CentOS 7 (GLIBC 2.17) with no C compiler.
+    # We MUST use --only-binary=:all: for all packages that have C
+    # extensions to avoid build failures. If a binary wheel is not
+    # available for this platform, we pin to an older version that does.
     echo ""
-    echo "Installing JAX (CPU-only wheels for setup, GPU at runtime)..."
+    echo "Installing dependencies (binary wheels only, no compilation)..."
+
+    # Core numerical packages first (need manylinux2014 wheels)
+    pip install --only-binary=:all: numpy scipy h5py 2>/dev/null || \
+        pip install --only-binary=:all: "numpy<2.0" "scipy<1.12" "h5py<3.11" || \
+        echo "WARNING: numpy/scipy/h5py binary install had issues"
+
+    # JAX ecosystem
     pip install --only-binary=:all: ml_dtypes 2>/dev/null || \
-        pip install "ml_dtypes<0.5.0" 2>/dev/null || \
-        echo "WARNING: ml_dtypes install had issues, continuing..."
+        pip install --only-binary=:all: "ml_dtypes<0.4.0" 2>/dev/null || true
+    pip install --only-binary=:all: jax jaxlib 2>/dev/null || \
+        pip install --only-binary=:all: "jax<0.4.26" "jaxlib<0.4.26" 2>/dev/null || \
+        pip install jax jaxlib
+    pip install flax optax
 
-    pip install jax jaxlib flax optax
-
+    # MuJoCo and Gymnasium
     echo ""
     echo "Installing MuJoCo and Gymnasium..."
-    pip install mujoco "gymnasium[mujoco]"
+    pip install --only-binary=:all: mujoco 2>/dev/null || \
+        pip install mujoco
+    pip install "gymnasium[mujoco]"
     pip install gym 2>/dev/null || true
 
+    # Other deps (pure Python packages don't need --only-binary)
     echo ""
     echo "Installing other dependencies..."
-    pip install h5py tqdm matplotlib numpy scipy
+    pip install tqdm matplotlib
     pip install absl-py ml_collections tensorboardX
     pip install tensorflow-probability 2>/dev/null || \
         echo "WARNING: tensorflow-probability install had issues"
 
+    # D4RL
     echo ""
     echo "Installing D4RL..."
     pip install git+https://github.com/Farama-Foundation/d4rl@master 2>/dev/null || \
