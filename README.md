@@ -30,7 +30,7 @@ The core research question: *How robust is Implicit Q-Learning under controlled 
 
 ---
 
-## What We Have Demonstrated So Far
+## What We Have Demonstrated
 
 ### Literature & Theory
 - Surveyed three offline RL approaches: IQL (expectile regression), CQL (pessimistic Q-values), TD3+BC (behavior cloning regularization)
@@ -38,44 +38,41 @@ The core research question: *How robust is Implicit Q-Learning under controlled 
 - Identified the gap: none of these methods have been evaluated under environment-level perturbations at test time
 
 ### Baseline Reproduction
-- Reproduced IQL on `hopper-medium-v2` with a final normalized score of **52.79** (300k training steps)
+- Trained IQL (2Q) on all 3 D4RL medium datasets: hopper (1712), halfcheetah (5510), walker2d (3550)
 - Implementation uses JAX/Flax with 2-layer MLPs (256 hidden units), expectile τ=0.7, temperature β=3.0
 
 ### Q-Ensemble Extension
 - Implemented `TripleCritic` — 3 Q-networks taking `min(q1, q2, q3)` for more conservative value estimation
-- Trained on `hopper-medium-v2` with a final score of **50.88** (300k steps)
-- The 1.91-point gap confirms the implementation is correct — the benefit of the ensemble is expected to show under distribution shift, not in baseline performance
+- Trained on all 3 environments: hopper (1426), halfcheetah (5536), walker2d (3549)
+- 3Q improves robustness on Hopper (lower AUDC across all 4 shifts) but the effect is environment-dependent
 
-### Distribution Shift Wrappers
-- **Gravity shift** — scales MuJoCo gravity vector (levels: 0.5x, 1.0x, 1.5x, 2.0x)
-- **Observation noise** — adds Gaussian noise to observations (σ = 0.0, 0.01, 0.1, 0.3)
-- **Friction shift** — scales MuJoCo friction coefficients (levels: 0.5x, 1.0x, 1.5x, 2.0x)
-- **Reward perturbation** — adds noise to rewards (σ = 0.0, 0.1, 0.5, 1.0)
+### Distribution Shift Evaluation
+- Evaluated 5 configurations (2Q, 3Q, 2Q-τ0.5, 2Q-τ0.8, 2Q-τ0.9) across 3 datasets and 4 shift types
+- **Total: 240 shift-level evaluations** (3 envs × 5 configs × 4 shifts × 4 levels), each averaged over 10 episodes
+- Gravity and friction are the most damaging shifts (AUDC > 0.5); reward perturbation has negligible impact
+
+### Expectile τ Ablation
+- Ablated τ ∈ {0.5, 0.7, 0.8, 0.9} on all 3 environments with 2Q
+- Clear trend: lower τ → lower baseline but better robustness (more pessimistic value estimates)
 
 ### Evaluation Pipeline
 - `scripts/evaluate_shift.py` — evaluates a trained agent under any combination of shift types, outputs CSV
-- `scripts/compute_robustness.py` — reads CSVs and computes Δ(δ), AUDC, worst-case performance, and side-by-side comparison tables
-- `scripts/run_all_hpc.sh` — single script that submits all training, evaluation, and ablation jobs to SLURM
+- `scripts/compute_robustness.py` — reads CSVs and computes Δ(δ), AUDC, worst-case performance, writes summary CSVs
+- `scripts/run_all_hpc.sh` — single script that runs all training, evaluation, ablation, and analysis on SLURM
 
 ---
 
-## What Remains
+## Experiment Status
 
 | Task | Status | Notes |
 |---|---|---|
-| Baseline training on halfcheetah-medium-v2 | Code ready, not yet run | Same script, different `--env_name` |
-| Baseline training on walker2d-medium-v2 | Code ready, not yet run | Same script, different `--env_name` |
-| Q-ensemble training on halfcheetah + walker2d | Code ready, not yet run | `--num_critics=3` |
-| Shift evaluation on hopper-medium-v2 (gravity + noise) | Done | results/results_gravity_shift.csv, results/results_noise_shift.csv |
-| Shift evaluation across halfcheetah + walker2d | Code ready, not yet run | `--shift_type=all` || Robustness metrics computation | Code ready, not yet run | Depends on shift eval CSVs |
-| Expectile τ ablation (τ = 0.5, 0.8, 0.9) | Code ready, not yet run | `--config.expectile=0.5` |
-| Multiple seeds for error bars | Code ready, not yet run | Change `--seed` |
-| Final results table and plots | Notebook ready | `notebooks/04_analyze_results.ipynb` |
-
-All of these are triggered by a single command on HPC:
-```bash
-./scripts/run_all_hpc.sh
-```
+| Baseline training (2Q) on all 3 envs | ✅ Complete | 300k steps, seed=42 |
+| Q-ensemble training (3Q) on all 3 envs | ✅ Complete | 300k steps, seed=42 |
+| Shift evaluation (2Q + 3Q × 4 shifts × 4 levels) | ✅ Complete | 6 CSVs in `results/` |
+| Expectile τ ablation (τ = 0.5, 0.8, 0.9) | ✅ Complete | 9 CSVs in `results/` |
+| Robustness metrics (AUDC, worst-case) | ✅ Complete | 3 summary CSVs |
+| Multiple seeds for error bars | Not yet run | Change `SEEDS` in `run_all_hpc.sh` |
+| Final results table and plots | Pending | `notebooks/04_analyze_results.ipynb` |
 
 ---
 
@@ -118,57 +115,64 @@ We extend IQL's `DoubleCritic` (2 Q-networks, `min(q1,q2)`) to a `TripleCritic` 
 
 ## Results
 
+All experiments run on SJSU CoE HPC (GPU partition), 300k training steps, seed=42.
+
 ### Baseline Performance (No Shift)
 
-| Environment | Baseline IQL (2Q) | Q-Ensemble IQL (3Q) |
+| Environment | 2Q Return | 3Q Return |
 |---|---|---|
-| hopper-medium-v2 | **59.09** | 46.01 |
-| halfcheetah-medium-v2 | — | — |
-| walker2d-medium-v2 | — | — |
+| hopper-medium-v2 | **1712** | 1426 |
+| halfcheetah-medium-v2 | 5510 | **5536** |
+| walker2d-medium-v2 | **3550** | 3549 |
 
-### Shift Evaluation — hopper-medium-v2
+### 2Q vs 3Q Robustness (AUDC — lower is better)
 
-**Gravity Shift**
+**Hopper** — 3Q more robust across all shifts:
 
-| Gravity Scale | Baseline IQL | Q-Ensemble IQL | Baseline Drop | Ensemble Drop |
+| Shift Type | 2Q AUDC | 3Q AUDC | Winner |
+|---|---|---|---|
+| Gravity | 0.596 | **0.574** | 3Q |
+| Obs Noise | 0.146 | **0.142** | 3Q |
+| Friction | 0.738 | **0.687** | 3Q |
+| Reward Perturb | 0.002 | **0.001** | 3Q |
+
+**HalfCheetah** — Mixed results:
+
+| Shift Type | 2Q AUDC | 3Q AUDC | Winner |
+|---|---|---|---|
+| Gravity | **0.245** | 0.255 | 2Q |
+| Obs Noise | 0.144 | **0.134** | 3Q |
+| Friction | 0.016 | **0.011** | 3Q |
+| Reward Perturb | **0.000** | 0.001 | 2Q |
+
+**Walker2d** — 2Q more robust on most shifts:
+
+| Shift Type | 2Q AUDC | 3Q AUDC | Winner |
+|---|---|---|---|
+| Gravity | **0.693** | 0.790 | 2Q |
+| Obs Noise | **0.118** | 0.128 | 2Q |
+| Friction | 0.161 | **0.154** | 3Q |
+| Reward Perturb | **0.001** | 0.002 | 2Q |
+
+### Expectile τ Ablation (2Q only)
+
+Higher τ → higher baseline but less robust. Lower τ (more pessimistic) trades performance for robustness.
+
+**Hopper — Gravity AUDC by τ:**
+
+| τ | Baseline | Gravity AUDC | Obs Noise AUDC | Friction AUDC |
 |---|---|---|---|---|
-| 0.5x | 9.45 | 12.18 | 44.81 | 32.58 |
-| 1.0x | 57.66 | 43.84 | 0.00 | 0.00 |
-| 1.5x | 22.85 | 24.23 | 40.06 | 21.80 |
-| 2.0x | 10.92 | 11.81 | 50.77 | 33.37 |
+| 0.5 | 1420 | **0.566** | **0.136** | **0.691** |
+| 0.7 | 1712 | 0.596 | 0.146 | 0.738 |
+| 0.8 | 1830 | 0.695 | 0.141 | 0.749 |
+| 0.9 | 1934 | 0.773 | 0.180 | 0.773 |
 
-**Observation Noise**
+### Key Findings
 
-| Noise Std | Baseline IQL | Q-Ensemble IQL | Baseline Drop | Ensemble Drop |
-|---|---|---|---|---|
-| 0.00 | 59.20 | 48.26 | 0.00 | 0.00 |
-| 0.01 | 64.47 | 48.43 | -5.27 | -0.17 |
-| 0.10 | 35.30 | 31.72 | 23.90 | 16.54 |
-| 0.30 | 10.64 | 9.02 | 48.56 | 39.24 |
-
-**Key Finding:** Q-Ensemble degrades less under both shift types despite starting
-lower at baseline. Under gravity shift the ensemble drop is on average 15 points
-smaller. Under observation noise the ensemble drop is on average 10 points smaller
-at high noise levels. This supports the hypothesis that conservative value estimation
-improves robustness under distribution shift.
-
-### Shift Evaluation — halfcheetah-medium-v2 and walker2d-medium-v2
-
-Pending — run `./scripts/run_all_hpc.sh` on HPC to generate.
-
-### Robustness Metrics (AUDC, Worst-Case)
-
-Pending — run `./scripts/compute_robustness.py` after shift evaluation completes.
-
-### Ablation Study (Expectile τ)
-
-Evaluation covers gravity shifts and observation noise shifts. Results are stored in:
-
-- `results/results_baseline_iql.csv` — baseline IQL evaluation results across shift types and levels
-- `results/results_ensemble_iql.csv` — Q-ensemble IQL evaluation results across shift types and levels
-- `results/results_comparison.png` — side-by-side comparison visualization of baseline vs. ensemble under shift
-
-Pending full runs — submit `./scripts/run_all_hpc.sh` on HPC to generate complete results.
+1. **Q-ensemble (3Q) improves robustness on Hopper** but the effect is environment-dependent — Walker2d shows the opposite trend
+2. **Reward perturbation has negligible impact** (AUDC < 0.003 everywhere) — offline policies are insensitive to reward noise at test time since they don't update
+3. **Gravity and friction are the most damaging shifts** — AUDC > 0.5 on Hopper and Walker2d
+4. **Lower expectile τ improves robustness** at the cost of baseline performance — consistent with IQL theory (more pessimistic value estimates)
 
 ---
 
@@ -176,60 +180,55 @@ Pending full runs — submit `./scripts/run_all_hpc.sh` on HPC to generate compl
 
 ```
 iql-robustness-analysis/
-├── configs/
-│   ├── antmaze_config.py          # AntMaze config (unused — placeholder)
-│   ├── antmaze_finetune_config.py # AntMaze fine-tuning config
-│   ├── kitchen_config.py          # Kitchen config (unused — placeholder)
-│   └── mujoco_config.py           # MuJoCo locomotion config (primary)
-├── evaluation/
-│   ├── __init__.py
-│   └── evaluate.py                # Rollout evaluation loop
-├── iql/
-│   ├── __init__.py
-│   ├── actor.py                   # Actor network (Gaussian policy)
-│   ├── common.py                  # Batch, MLP, Model, type aliases
-│   ├── critic.py                  # Double/Triple-Q critic
-│   ├── dataset_utils.py           # D4RL dataset loading utilities
-│   ├── learner.py                 # IQL training loop + checkpointing
-│   ├── policy.py                  # NormalTanhPolicy + action sampling
-│   └── value_net.py               # DoubleCritic, TripleCritic, ValueCritic
-├── notebooks/
-│   ├── 01_train.ipynb             # Train both 2Q and 3Q on all envs
-│   ├── 02_evaluate_shift.ipynb    # Evaluate under distribution shifts
-│   ├── 03_analyze_results.ipynb   # Generate plots and tables
-│   ├── uday_q_ensemble_iql.ipynb  # Standalone Q-ensemble (Uday)
-│   └── zz_iql_shift_evaluation.ipynb  # Archived: early shift evaluation
-├── results/
-│   ├── results_baseline_iql.csv   # Baseline IQL scores (hopper)
-│   ├── results_ensemble_iql.csv   # Q-ensemble scores (hopper)
-│   ├── results_comparison.png     # Baseline vs ensemble curves
-│   ├── results_gravity_shift.csv  # Gravity shift robustness
-│   ├── results_noise_shift.csv    # Observation noise robustness
-│   └── results_shift_comparison.png  # Shift comparison plots
-├── scripts/
-│   ├── compute_robustness.py      # Compute robustness metrics from CSVs
-│   ├── evaluate_shift.py          # Evaluate agent under shifts
-│   ├── hpc_aliases.sh             # Shell aliases for HPC workflow
-│   ├── run_all_hpc.sh             # SLURM batch script (setup/train/eval)
-│   ├── train_finetune.py          # Online fine-tuning
-│   ├── train_offline.py           # Offline IQL training
-│   ├── validate_pipeline.py       # Full pipeline validation (10 steps)
-│   └── verify_env.py              # Quick dependency check
-├── wrappers/
-│   ├── __init__.py
-│   ├── common.py                  # TimeStep type alias
-│   ├── episode_monitor.py         # Episode return/length tracking
-│   ├── friction_shift.py          # Joint friction perturbation
-│   ├── gravity_shift.py           # Gravity vector perturbation
-│   ├── observation_noise.py       # Gaussian observation noise
-│   ├── reward_perturbation.py     # Reward scaling/noise
-│   └── single_precision.py        # Float64 → Float32 conversion
-├── .gitignore
+├── iql/                          # Core IQL implementation
+│   ├── actor.py                  #   Actor update (advantage-weighted BC)
+│   ├── critic.py                 #   Critic update (2 or 3 Q-networks)
+│   ├── common.py                 #   MLP, Model, Batch definitions
+│   ├── learner.py                #   Training loop + checkpointing
+│   ├── policy.py                 #   NormalTanhPolicy + sampling
+│   ├── value_net.py              #   DoubleCritic, TripleCritic, ValueCritic
+│   └── dataset_utils.py          #   D4RL dataset loading
+│
+├── evaluation/                   # Policy evaluation
+│   └── evaluate.py
+│
+├── wrappers/                     # Environment wrappers
+│   ├── episode_monitor.py        #   Episode return/length tracking
+│   ├── single_precision.py       #   Float32 casting
+│   ├── gravity_shift.py          #   Gravity scaling
+│   ├── observation_noise.py      #   Gaussian observation noise
+│   ├── friction_shift.py         #   Friction scaling
+│   └── reward_perturbation.py    #   Reward noise/scaling
+│
+├── configs/                      # Hyperparameter configs
+│   ├── mujoco_config.py          #   τ=0.7, β=3.0
+│   ├── antmaze_config.py         #   τ=0.9, β=10.0
+│   └── kitchen_config.py         #   τ=0.7, β=0.5, dropout=0.1
+│
+├── scripts/                      # Training & evaluation
+│   ├── train_offline.py          #   Offline training (--num_critics flag)
+│   ├── train_finetune.py         #   Online finetuning
+│   ├── evaluate_shift.py         #   Evaluate under shift (all 4 types)
+│   ├── compute_robustness.py     #   Compute metrics from CSVs
+│   └── run_all_hpc.sh            #   Submit all experiments to SLURM
+│
+├── notebooks/                    # Jupyter notebooks
+│   ├── 01_train_baseline.ipynb   #   Train 2Q on all envs
+│   ├── 02_train_ensemble.ipynb   #   Train 3Q on all envs
+│   ├── 03_evaluate_shift.ipynb   #   Evaluate under shift
+│   └── 04_analyze_results.ipynb  #   Generate plots and tables
+│
+├── results/                      # Experiment outputs
+│   ├── shift_{env}_{2Q|3Q}_seed42.csv        # Phase 2: shift eval (6 files)
+│   ├── shift_{env}_2Q_seed42_tau{τ}.csv      # Phase 3: ablation (9 files)
+│   ├── summary_{env}.csv                     # Phase 4: AUDC summary (3 files)
+│   ├── results_baseline_iql.csv              # Training curve (2Q hopper)
+│   ├── results_ensemble_iql.csv              # Training curve (3Q hopper)
+│   └── results_comparison.png                # Comparison plot
+│
+├── requirements.txt
 ├── LICENSE
-├── README.md
-├── requirements.txt               # General dependencies (pip)
-├── requirements-hpc.txt           # Pinned HPC dependencies (SJSU HPC)
-└── setup.py                       # Package installation
+└── .gitignore
 ```
 
 ---
@@ -254,12 +253,7 @@ cd iql-robustness-analysis
 # 3. One-time setup (on login node — downloads pre-built wheels)
 bash scripts/run_all_hpc.sh setup
 
-# 4. Verify environment and validate pipeline before submitting
-source scripts/hpc_aliases.sh       # load convenience aliases
-iql-verify                          # quick dependency/environment check
-iql-validate                        # full pipeline validation (pre-HPC)
-
-# 5. Submit experiments to GPU nodes
+# 4. Submit experiments to GPU nodes
 mkdir -p logs
 sbatch scripts/run_all_hpc.sh          # full pipeline
 # or run individual steps:
@@ -267,12 +261,10 @@ sbatch scripts/run_all_hpc.sh          # full pipeline
 # sbatch scripts/run_all_hpc.sh eval     # shift evaluation only
 # sbatch scripts/run_all_hpc.sh analyze  # compute metrics only
 
-# 6. Monitor
+# 5. Monitor
 squeue -u $USER                        # check job status
 tail -f logs/slurm_<job_id>.out        # watch output
 ```
-
-The recommended workflow is: **verify → validate → sbatch**. `scripts/verify_env.py` performs a quick check that dependencies are installed and the environment is functional. `scripts/validate_pipeline.py` runs a comprehensive end-to-end pipeline validation (training, evaluation, metrics) with minimal steps to catch issues before committing to a full SLURM job.
 
 The setup step creates a Python venv using the system Python 3.11 and installs
 all dependencies as pre-built binary wheels (no compilation needed). This only
@@ -299,16 +291,13 @@ source scripts/hpc_aliases.sh    # load once per session
 
 | Alias | Command |
 |---|---|
-| `iql-verify` | Quick environment/dependency check (`verify_env.py`) |
-| `iql-validate` | Full pipeline validation (`validate_pipeline.py`) |
-| `iql-train` | Submit training only |
-| `iql-eval` | Submit evaluation only |
-| `iql-robust` | Compute robustness metrics |
 | `jobs` | Check your job status |
 | `myjobs` | Detailed job listing |
 | `killall` | Cancel all your jobs |
 | `iql-setup` | One-time environment setup |
 | `iql-run` | Submit full pipeline |
+| `iql-train` | Submit training only |
+| `iql-eval` | Submit evaluation only |
 | `iql-analyze` | Submit analysis only |
 | `lastlog` | Tail the latest output log |
 | `lasterr` | Tail the latest error log |
@@ -320,11 +309,7 @@ source scripts/hpc_aliases.sh    # load once per session
 
 ### On Google Colab
 
-For the full team pipeline, run the notebooks in order:
-`01_train_baseline.ipynb` → `02_train_ensemble.ipynb` → `03_evaluate_shift.ipynb` → `04_analyze_results.ipynb`
-
-For the Q-ensemble extension and robustness experiments specifically, see:
-`notebooks/uday_q_ensemble_iql.ipynb` — self-contained notebook that trains both baseline IQL and Q-ensemble, then evaluates both under gravity and observation noise shift. No local setup required, runs fully on Google Colab with A100 GPU.
+Run the notebooks in order: `01_train_baseline.ipynb` → `02_train_ensemble.ipynb` → `03_evaluate_shift.ipynb` → `04_analyze_results.ipynb`
 
 ### Locally
 
@@ -350,15 +335,6 @@ python scripts/compute_robustness.py --results_dir=results/ --env_name=hopper-me
 | Training steps | 300,000 |
 | Optimizer | Adam |
 | Actor LR schedule | Cosine decay |
-
----
-
-## Known Issues / Technical Debt
-
-- **Duplicate `Batch` namedtuple:** `Batch` is defined in both `iql/common.py` and `iql/dataset_utils.py` (identical definitions). Consolidation into a single source is planned.
-- **Outdated JAX version pin:** `requirements.txt` pins JAX to `<= 0.2.21`, which is outdated. Use `requirements-hpc.txt` for current pinned versions on SJSU HPC.
-- **Placeholder configs:** `configs/antmaze_config.py` and `configs/kitchen_config.py` are placeholder configurations not yet integrated into the training/evaluation pipeline.
-- **Overlapping verification scripts:** `scripts/verify_env.py` (quick dependency check) and `scripts/validate_pipeline.py` (comprehensive pipeline validation) have overlapping functionality. Consolidation is planned.
 
 ---
 
