@@ -171,20 +171,25 @@ setup_environment() {
     export D4RL_SUPPRESS_IMPORT_ERROR=1
 
     # Pre-download D4RL datasets (GPU nodes have no internet)
+    # Downloads HDF5 files directly to ~/.d4rl/datasets/ so the
+    # cache-first path in _load_d4rl_dataset() finds them on GPU nodes.
     echo ""
     echo "Pre-downloading D4RL datasets (GPU nodes have no internet)..."
     python -c "
-import os, sys
-sys.path.insert(0, '${PROJECT_DIR}')
-os.environ['D4RL_SUPPRESS_IMPORT_ERROR'] = '1'
-from iql.dataset_utils import _load_d4rl_dataset
-for env in ['hopper-medium-v2', 'halfcheetah-medium-v2', 'walker2d-medium-v2']:
-    print(f'  Downloading {env}...')
-    try:
-        _load_d4rl_dataset(env)
-        print(f'    OK')
-    except Exception as e:
-        print(f'    Failed: {e}')
+import os, urllib.request
+cache_dir = os.path.join(os.path.expanduser('~'), '.d4rl', 'datasets')
+os.makedirs(cache_dir, exist_ok=True)
+for name in ['hopper-medium-v2', 'halfcheetah-medium-v2', 'walker2d-medium-v2']:
+    path = os.path.join(cache_dir, f'{name}.hdf5')
+    if os.path.exists(path):
+        sz = os.path.getsize(path) / (1024*1024)
+        print(f'  {name}: already cached ({sz:.1f} MB)')
+    else:
+        url = f'http://rail.eecs.berkeley.edu/datasets/offline_rl/gym_mujoco_v2/{name}.hdf5'
+        print(f'  {name}: downloading from {url} ...')
+        urllib.request.urlretrieve(url, path)
+        sz = os.path.getsize(path) / (1024*1024)
+        print(f'  {name}: saved ({sz:.1f} MB)')
 "
 
     # Run full verification
