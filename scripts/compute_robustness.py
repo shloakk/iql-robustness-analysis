@@ -48,7 +48,7 @@ def compute_audc(results, shift_type):
 
 def main(_):
     pattern = os.path.join(FLAGS.results_dir,
-                           f'shift_results_{FLAGS.env_name}_*.csv')
+                           f'shift_{FLAGS.env_name}_*.csv')
     files = glob.glob(pattern)
 
     if not files:
@@ -65,7 +65,11 @@ def main(_):
         parts = filename.replace('.csv', '').split('_')
         critic_label = [p for p in parts if p.endswith('Q')][0] \
             if any(p.endswith('Q') for p in parts) else 'unknown'
-        all_configs[critic_label] = load_results(filepath)
+        # Extract tau from filename if present (e.g., shift_..._2Q_seed42_tau0.5.csv)
+        tau_parts = [p for p in parts if p.startswith('tau')]
+        tau_label = f'_{tau_parts[0]}' if tau_parts else ''
+        config_key = f'{critic_label}{tau_label}'
+        all_configs[config_key] = load_results(filepath)
 
     for label, results in sorted(all_configs.items()):
         print(f"\n--- {label} ---")

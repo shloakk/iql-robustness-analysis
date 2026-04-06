@@ -189,10 +189,12 @@ def main(_):
         baseline = baseline_scores.get(r['shift_type'], r['raw_return'])
         r['robustness_drop'] = compute_robustness_drop(baseline, r['raw_return'])
 
-    # Save results
+    # Save results — include expectile (tau) in filename when non-default
+    tau = FLAGS.config.expectile
+    tau_suffix = f'_tau{tau}' if tau != 0.7 else ''
     output_file = os.path.join(
         FLAGS.output_dir,
-        f'shift_{FLAGS.env_name}_{critic_label}_seed{FLAGS.seed}.csv')
+        f'shift_{FLAGS.env_name}_{critic_label}_seed{FLAGS.seed}{tau_suffix}.csv')
 
     with open(output_file, 'w', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=[
