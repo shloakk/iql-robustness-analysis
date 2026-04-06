@@ -41,7 +41,10 @@ def test_core_imports():
     from tensorflow_probability.substrates import jax as tfp
     import gymnasium as gym
     import mujoco
-    print(f'         numpy={np.__version__}, jax={jax.__version__}, mujoco={mujoco.__version__}')
+    devices = jax.devices()
+    gpu_count = len([d for d in devices if d.platform == 'gpu'])
+    backend = f'GPU x{gpu_count}' if gpu_count > 0 else 'CPU only'
+    print(f'         numpy={np.__version__}, jax={jax.__version__}, mujoco={mujoco.__version__}, backend={backend}')
 
 
 def test_iql_imports():

@@ -128,7 +128,7 @@ setup_environment() {
     echo "  Downloading binary wheels..."
     pip download --only-binary=:all: --dest "$WHEEL_DIR" \
         numpy==1.26.4 scipy==1.13.1 h5py==3.11.0 \
-        jax==0.4.35 jaxlib==0.4.35 ml_dtypes==0.4.1 \
+        jax==0.4.35 ml_dtypes==0.4.1 \
         mujoco==3.1.6 matplotlib==3.9.2 \
         flax==0.8.5 optax==0.2.3 \
         tensorflow-probability==0.23.0
@@ -137,10 +137,47 @@ setup_environment() {
     echo "  Installing from downloaded wheels..."
     pip install --no-index --find-links="$WHEEL_DIR" \
         numpy==1.26.4 scipy==1.13.1 h5py==3.11.0 \
-        jax==0.4.35 jaxlib==0.4.35 ml_dtypes==0.4.1 \
+        jax==0.4.35 ml_dtypes==0.4.1 \
         mujoco==3.1.6 matplotlib==3.9.2 \
         flax==0.8.5 optax==0.2.3 \
         tensorflow-probability==0.23.0
+
+    # Install jaxlib with CUDA support for GPU acceleration.
+    # Detect CUDA version from the module system and install the matching wheel.
+    # Falls back to CPU-only jaxlib if CUDA is not available.
+    echo ""
+    echo "  Installing jaxlib with CUDA support..."
+    module load cuda 2>/dev/null || true
+    CUDA_VER=""
+    if command -v nvcc &>/dev/null; then
+        CUDA_VER=$(nvcc --version 2>/dev/null | grep -oP 'release \K[0-9]+\.[0-9]+' | head -1)
+    elif [ -n "$CUDA_HOME" ]; then
+        CUDA_VER=$(ls "$CUDA_HOME/lib64/libcudart.so."* 2>/dev/null | grep -oP '[0-9]+\.[0-9]+' | head -1)
+    fi
+
+    if [ -n "$CUDA_VER" ]; then
+        CUDA_MAJOR=$(echo "$CUDA_VER" | cut -d. -f1)
+        echo "  Detected CUDA ${CUDA_VER} (major: ${CUDA_MAJOR})"
+        if [ "$CUDA_MAJOR" -ge 12 ]; then
+            echo "  Installing jaxlib with CUDA 12 support..."
+            pip install "jaxlib[cuda12]==0.4.35" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html 2>/dev/null || \
+                pip install jaxlib==0.4.35 -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html 2>/dev/null || \
+                { echo "  WARNING: CUDA jaxlib install failed, using CPU-only"; pip install --no-index --find-links="$WHEEL_DIR" jaxlib==0.4.35; }
+        elif [ "$CUDA_MAJOR" -ge 11 ]; then
+            echo "  Installing jaxlib with CUDA 11 support..."
+            pip install "jaxlib[cuda11_pip]==0.4.35" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html 2>/dev/null || \
+                pip install jaxlib==0.4.35 -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html 2>/dev/null || \
+                { echo "  WARNING: CUDA jaxlib install failed, using CPU-only"; pip install --no-index --find-links="$WHEEL_DIR" jaxlib==0.4.35; }
+        else
+            echo "  CUDA ${CUDA_VER} too old for JAX GPU. Installing CPU-only jaxlib."
+            pip download --only-binary=:all: --dest "$WHEEL_DIR" jaxlib==0.4.35 2>/dev/null || true
+            pip install --no-index --find-links="$WHEEL_DIR" jaxlib==0.4.35
+        fi
+    else
+        echo "  No CUDA detected. Installing CPU-only jaxlib."
+        pip download --only-binary=:all: --dest "$WHEEL_DIR" jaxlib==0.4.35 2>/dev/null || true
+        pip install --no-index --find-links="$WHEEL_DIR" jaxlib==0.4.35
+    fi
 
     # Pure Python packages — install normally from PyPI
     echo ""
