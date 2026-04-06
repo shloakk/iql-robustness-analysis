@@ -236,11 +236,15 @@ setup_environment() {
         echo "  Training will work but be ~15x slower without GPU."
     fi
 
-    # Install nvidia-cudnn-cu12 for cuDNN runtime (needed by CUDA jaxlib)
+    # Install NVIDIA CUDA runtime packages (cuDNN, cuBLAS, etc.)
+    # These provide the shared libraries that CUDA jaxlib needs at runtime.
+    # Must use --extra-index-url to access pypi.nvidia.com for the real wheels.
     if [ "$JAXLIB_INSTALLED" -eq 1 ]; then
         echo ""
-        echo "  Installing nvidia-cudnn-cu12 (cuDNN runtime)..."
-        pip install nvidia-cudnn-cu12 2>&1 || echo "  WARNING: nvidia-cudnn-cu12 install failed"
+        echo "  Installing NVIDIA CUDA runtime packages..."
+        pip install --extra-index-url https://pypi.nvidia.com \
+            nvidia-cudnn-cu12 nvidia-cublas-cu12 nvidia-cuda-runtime-cu12 \
+            2>&1 || echo "  WARNING: NVIDIA runtime packages install failed"
     fi
 
     # Re-enable exit-on-error
