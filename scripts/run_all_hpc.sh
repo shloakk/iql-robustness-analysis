@@ -419,8 +419,7 @@ run_ablation() {
     echo "    Tau values: $TAU_VALUES"
     echo ""
 
-    mkdir -p results/ablation_tau
-
+    # Ablation results go to results/ (tau value is in the filename)
     for env in $ENVIRONMENTS; do
         for tau in $TAU_VALUES; do
             for seed in $SEEDS; do
@@ -445,7 +444,7 @@ run_ablation() {
                     --max_steps="${MAX_STEPS}" \
                     --seed="${seed}" \
                     --save_dir="${SAVE_DIR}" \
-                    --output_dir=results/ablation_tau/
+                    --output_dir=results/
             done
         done
     done
