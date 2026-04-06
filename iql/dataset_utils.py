@@ -101,6 +101,28 @@ class Dataset(object):
                      next_observations=self.next_observations[indx])
 
 
+def _d4rl_url_filename(env_name):
+    """Convert D4RL env name to the URL filename used by D4RL servers.
+
+    D4RL naming convention for v2 datasets:
+      env name:     hopper-medium-v2       (all dashes)
+      URL filename: hopper_medium-v2.hdf5  (underscore between env and dataset)
+
+    The filename in the URL is: {env}_{dataset}-{version}.hdf5
+    where the first dash (between env and dataset) becomes an underscore.
+    """
+    # Split: 'hopper-medium-v2' -> ['hopper', 'medium', 'v2']
+    parts = env_name.split('-')
+    if len(parts) >= 3 and parts[-1].startswith('v'):
+        # e.g., hopper-medium-replay-v2 -> hopper_medium_replay-v2
+        env_part = parts[0]
+        version = parts[-1]
+        dataset_parts = parts[1:-1]
+        return f"{env_part}_{'_'.join(dataset_parts)}-{version}.hdf5"
+    # Fallback: just replace first dash with underscore
+    return env_name.replace('-', '_', 1) + '.hdf5'
+
+
 def _load_from_hdf5(cache_path):
     """Load a D4RL dataset from a local HDF5 file."""
     import h5py
@@ -136,8 +158,10 @@ def _load_d4rl_dataset(env_or_name):
     name = env_or_name if isinstance(env_or_name, str) else getattr(
         getattr(env_or_name, 'spec', None), 'id', str(env_or_name))
 
+    # D4RL stores files using URL filename convention (underscores)
+    url_filename = _d4rl_url_filename(name)
     cache_dir = os.path.join(os.path.expanduser('~'), '.d4rl', 'datasets')
-    cache_path = os.path.join(cache_dir, f"{name}.hdf5")
+    cache_path = os.path.join(cache_dir, url_filename)
 
     # 1. Prefer local cache — no internet, no D4RL import needed
     if os.path.exists(cache_path):
@@ -160,10 +184,10 @@ def _load_d4rl_dataset(env_or_name):
     # 3. Fallback: download the HDF5 file directly from D4RL URLs
     import urllib.request
 
-    url = f"http://rail.eecs.berkeley.edu/datasets/offline_rl/gym_mujoco_v2/{name}.hdf5"
+    url = f"http://rail.eecs.berkeley.edu/datasets/offline_rl/gym_mujoco_v2/{url_filename}"
     os.makedirs(cache_dir, exist_ok=True)
 
-    print(f"Downloading D4RL dataset: {name} ...")
+    print(f"Downloading D4RL dataset: {url} ...")
     urllib.request.urlretrieve(url, cache_path)
     print(f"Saved to {cache_path}")
 

@@ -155,16 +155,26 @@ def test_sample_actions():
 
 
 def test_datasets_cached():
-    """Check that D4RL datasets are downloaded and cached."""
+    """Check that D4RL datasets are downloaded and cached.
+
+    D4RL v2 filename convention:
+      env name:     hopper-medium-v2
+      cache file:   hopper_medium-v2.hdf5  (underscore between env and dataset)
+    """
+    # Import the helper to get the correct filename
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from iql.dataset_utils import _d4rl_url_filename
+
     cache_dir = os.path.join(os.path.expanduser('~'), '.d4rl', 'datasets')
     missing = []
     for env_name in ['hopper-medium-v2', 'halfcheetah-medium-v2', 'walker2d-medium-v2']:
-        path = os.path.join(cache_dir, f'{env_name}.hdf5')
+        filename = _d4rl_url_filename(env_name)
+        path = os.path.join(cache_dir, filename)
         if os.path.exists(path):
             size_mb = os.path.getsize(path) / (1024 * 1024)
-            print(f'         {env_name}: {size_mb:.1f} MB')
+            print(f'         {env_name} -> {filename}: {size_mb:.1f} MB')
         else:
-            missing.append(env_name)
+            missing.append(f'{env_name} ({filename})')
     if missing:
         raise FileNotFoundError(
             f'Missing datasets: {missing}. Run iql-setup on the login node first.'

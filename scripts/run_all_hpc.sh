@@ -173,36 +173,43 @@ setup_environment() {
     # Pre-download D4RL datasets (GPU nodes have no internet)
     # Downloads HDF5 files directly to ~/.d4rl/datasets/ so the
     # cache-first path in _load_d4rl_dataset() finds them on GPU nodes.
+    #
+    # D4RL v2 filename convention:
+    #   env name:     hopper-medium-v2
+    #   URL filename: hopper_medium-v2.hdf5  (underscore between env and dataset)
+    #   URL: http://rail.eecs.berkeley.edu/datasets/offline_rl/gym_mujoco_v2/hopper_medium-v2.hdf5
+    #
+    # Uses curl instead of Python urllib to avoid SJSU Proofpoint URL proxy.
     echo ""
     echo "Pre-downloading D4RL datasets (GPU nodes have no internet)..."
-    python -c "
-import os, urllib.request
-cache_dir = os.path.join(os.path.expanduser('~'), '.d4rl', 'datasets')
-os.makedirs(cache_dir, exist_ok=True)
-for name in ['hopper-medium-v2', 'halfcheetah-medium-v2', 'walker2d-medium-v2']:
-    path = os.path.join(cache_dir, f'{name}.hdf5')
-    if os.path.exists(path):
-        sz = os.path.getsize(path) / (1024*1024)
-        print(f'  {name}: already cached ({sz:.1f} MB)')
-    else:
-        url = f'http://rail.eecs.berkeley.edu/datasets/offline_rl/gym_mujoco_v2/{name}.hdf5'
-        print(f'  {name}: downloading from {url} ...')
-        urllib.request.urlretrieve(url, path)
-        sz = os.path.getsize(path) / (1024*1024)
-        print(f'  {name}: saved ({sz:.1f} MB)')
-"
+    CACHE_DIR="$HOME/.d4rl/datasets"
+    mkdir -p "$CACHE_DIR"
+
+    for ds_file in hopper_medium-v2.hdf5 halfcheetah_medium-v2.hdf5 walker2d_medium-v2.hdf5; do
+        FPATH="${CACHE_DIR}/${ds_file}"
+        if [ -f "$FPATH" ]; then
+            SIZE=$(du -h "$FPATH" | cut -f1)
+            echo "  ${ds_file}: already cached (${SIZE})"
+        else
+            URL="http://rail.eecs.berkeley.edu/datasets/offline_rl/gym_mujoco_v2/${ds_file}"
+            echo "  ${ds_file}: downloading from ${URL} ..."
+            curl -L -o "$FPATH" "$URL"
+            SIZE=$(du -h "$FPATH" | cut -f1)
+            echo "  ${ds_file}: saved (${SIZE})"
+        fi
+    done
 
     # Verify datasets were downloaded
     echo ""
     echo "Verifying dataset cache..."
-    CACHE_DIR="$HOME/.d4rl/datasets"
     MISSING=0
-    for ds in hopper-medium-v2 halfcheetah-medium-v2 walker2d-medium-v2; do
-        if [ -f "${CACHE_DIR}/${ds}.hdf5" ]; then
-            SIZE=$(du -h "${CACHE_DIR}/${ds}.hdf5" | cut -f1)
-            echo "  OK  ${ds}.hdf5 (${SIZE})"
+    for ds_file in hopper_medium-v2.hdf5 halfcheetah_medium-v2.hdf5 walker2d_medium-v2.hdf5; do
+        FPATH="${CACHE_DIR}/${ds_file}"
+        if [ -f "$FPATH" ]; then
+            SIZE=$(du -h "$FPATH" | cut -f1)
+            echo "  OK  ${ds_file} (${SIZE})"
         else
-            echo "  MISSING  ${ds}.hdf5"
+            echo "  MISSING  ${ds_file}"
             MISSING=$((MISSING + 1))
         fi
     done
