@@ -70,6 +70,7 @@ echo "============================================"
 activate_env() {
     module load python3 2>/dev/null || true
     module load cuda 2>/dev/null || true
+    module load cudnn 2>/dev/null || true
 
     if [ -f "${VENV_DIR}/bin/activate" ]; then
         source "${VENV_DIR}/bin/activate"
@@ -85,6 +86,31 @@ activate_env() {
     export PYTHONPATH="${PROJECT_DIR}:${PYTHONPATH:-}"
     # Suppress D4RL warnings for envs we don't use (mujoco_py, flow, etc.)
     export D4RL_SUPPRESS_IMPORT_ERROR=1
+
+    # Help JAX find cuDNN from the nvidia-cudnn-cu12 pip package
+    CUDNN_PATH=$(python -c "import nvidia.cudnn; import os; print(os.path.dirname(nvidia.cudnn.__file__))" 2>/dev/null)
+    if [ -n "$CUDNN_PATH" ]; then
+        export LD_LIBRARY_PATH="${CUDNN_PATH}/lib:${LD_LIBRARY_PATH:-}"
+    fi
+
+    # GPU check — report JAX backend immediately
+    echo ""
+    echo "--- JAX Backend Check ---"
+    python -c "
+import jax
+devices = jax.devices()
+gpu_devs = [d for d in devices if d.platform == 'gpu']
+if gpu_devs:
+    print(f'  GPU ENABLED: {len(gpu_devs)} GPU(s) detected')
+    for d in gpu_devs:
+        print(f'    {d}')
+else:
+    print('  CPU ONLY: No GPU detected by JAX')
+    print('  (Re-run setup with CUDA to enable GPU acceleration)')
+print(f'  JAX version: {jax.__version__}')
+" 2>/dev/null || echo "  WARNING: JAX import failed"
+    echo "-------------------------"
+    echo ""
 }
 
 # ─────────────────────────────────────────────────────────────────────
@@ -125,10 +151,16 @@ setup_environment() {
     WHEEL_DIR="${PROJECT_DIR}/.wheels"
     mkdir -p "$WHEEL_DIR"
 
+    # JAX version strategy:
+    #   jaxlib 0.4.29 is the NEWEST version with manylinux2014 CUDA wheels
+    #   (compatible with SJSU HPC GLIBC 2.17). Versions 0.4.30+ require GLIBC 2.28.
+    #   jax 0.4.29 is compatible with tensorflow-probability 0.23.0.
+    JAX_VER="0.4.29"
+
     echo "  Downloading binary wheels..."
     pip download --only-binary=:all: --dest "$WHEEL_DIR" \
         numpy==1.26.4 scipy==1.13.1 h5py==3.11.0 \
-        jax==0.4.35 jaxlib==0.4.35 ml_dtypes==0.4.1 \
+        "jax==${JAX_VER}" "jaxlib==${JAX_VER}" ml_dtypes==0.4.1 \
         mujoco==3.1.6 matplotlib==3.9.2 \
         flax==0.8.5 optax==0.2.3 \
         tensorflow-probability==0.23.0
@@ -137,10 +169,95 @@ setup_environment() {
     echo "  Installing from downloaded wheels..."
     pip install --no-index --find-links="$WHEEL_DIR" \
         numpy==1.26.4 scipy==1.13.1 h5py==3.11.0 \
-        jax==0.4.35 jaxlib==0.4.35 ml_dtypes==0.4.1 \
+        "jax==${JAX_VER}" "jaxlib==${JAX_VER}" ml_dtypes==0.4.1 \
         mujoco==3.1.6 matplotlib==3.9.2 \
         flax==0.8.5 optax==0.2.3 \
         tensorflow-probability==0.23.0
+
+    # Install jaxlib with CUDA support for GPU acceleration.
+    # jaxlib 0.4.29 is the last version with manylinux2014 CUDA wheels
+    # (GLIBC 2.17 compatible). The wheel is ~600MB and includes CUDA+cuDNN.
+    #
+    # For 0.4.29, the CUDA 12 variant is: jaxlib==0.4.29+cuda12.cudnn91
+    echo ""
+    echo "  Installing jaxlib ${JAX_VER} with CUDA 12 support..."
+    echo "  (manylinux2014 wheel — compatible with GLIBC 2.17)"
+    echo ""
+
+    JAXLIB_INSTALLED=0
+    CUDA_WHEEL_NAME="jaxlib-${JAX_VER}+cuda12.cudnn91-cp311-cp311-manylinux2014_x86_64.whl"
+    CUDA_WHEEL="${WHEEL_DIR}/${CUDA_WHEEL_NAME}"
+    CUDA_WHEEL_URL="https://storage.googleapis.com/jax-releases/cuda12/${CUDA_WHEEL_NAME}"
+
+    # Temporarily disable exit-on-error for CUDA install attempts
+    set +e
+
+    # Method 1: pip install with -f flag
+    echo "  Attempting pip install jaxlib==${JAX_VER}+cuda12.cudnn91 ..."
+    pip install "jaxlib==${JAX_VER}+cuda12.cudnn91" \
+        -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html \
+        2>&1
+
+    # Check if CUDA jaxlib is installed (pip metadata shows +cuda even if
+    # Python's jaxlib.__version__ doesn't include the suffix)
+    INSTALLED_VER=$(pip show jaxlib 2>/dev/null | grep -i "^Version:" | awk '{print $2}')
+    echo "  Installed: ${INSTALLED_VER}"
+    if echo "$INSTALLED_VER" | grep -qi "cuda"; then
+        echo "  SUCCESS: CUDA 12 jaxlib installed via pip"
+        JAXLIB_INSTALLED=1
+    fi
+
+    # Method 2: Direct download with curl (fallback)
+    if [ "$JAXLIB_INSTALLED" -eq 0 ]; then
+        echo ""
+        echo "  pip install failed. Trying direct download with curl..."
+        if [ ! -f "$CUDA_WHEEL" ]; then
+            curl -L -o "$CUDA_WHEEL" "$CUDA_WHEEL_URL" 2>&1
+        fi
+        if [ -f "$CUDA_WHEEL" ]; then
+            SIZE=$(du -h "$CUDA_WHEEL" | cut -f1)
+            echo "  Downloaded: ${SIZE}"
+            pip install "$CUDA_WHEEL" 2>&1
+            INSTALLED_VER=$(pip show jaxlib 2>/dev/null | grep -i "^Version:" | awk '{print $2}')
+            echo "  Installed: ${INSTALLED_VER}"
+            if echo "$INSTALLED_VER" | grep -qi "cuda"; then
+                echo "  SUCCESS: CUDA 12 jaxlib installed via curl"
+                JAXLIB_INSTALLED=1
+            fi
+        fi
+    fi
+
+    # Fallback: CPU-only (use the jaxlib already downloaded in .wheels)
+    if [ "$JAXLIB_INSTALLED" -eq 0 ]; then
+        echo ""
+        echo "  WARNING: CUDA jaxlib install failed. Using CPU-only."
+        pip install --no-index --find-links="$WHEEL_DIR" "jaxlib==${JAX_VER}" 2>/dev/null || \
+            pip install "jaxlib==${JAX_VER}" 2>/dev/null || true
+        echo "  Training will work but be ~15x slower without GPU."
+    fi
+
+    # Install nvidia-cudnn-cu12 (cuDNN runtime library).
+    # The CUDA jaxlib wheel needs cuDNN at runtime. cuBLAS and CUDA runtime
+    # are typically provided by the GPU node's CUDA driver (module load cuda).
+    # Must use --extra-index-url to access pypi.nvidia.com for the real wheel.
+    # Note: nvidia-cublas-cu12 requires manylinux_2_27 which is incompatible
+    # with SJSU HPC GLIBC 2.17, but cuBLAS comes with the CUDA module.
+    if [ "$JAXLIB_INSTALLED" -eq 1 ]; then
+        echo ""
+        echo "  Installing nvidia-cudnn-cu12 (cuDNN runtime, ~560MB)..."
+        pip install --extra-index-url https://pypi.nvidia.com \
+            --no-deps nvidia-cudnn-cu12 \
+            2>&1 || echo "  WARNING: nvidia-cudnn-cu12 install failed"
+    fi
+
+    # Re-enable exit-on-error
+    set -e
+
+    # Report what was installed
+    echo ""
+    echo "  Installed jaxlib version:"
+    pip show jaxlib 2>/dev/null | grep -i version
+    echo ""
 
     # Pure Python packages — install normally from PyPI
     echo ""
@@ -173,36 +290,43 @@ setup_environment() {
     # Pre-download D4RL datasets (GPU nodes have no internet)
     # Downloads HDF5 files directly to ~/.d4rl/datasets/ so the
     # cache-first path in _load_d4rl_dataset() finds them on GPU nodes.
+    #
+    # D4RL v2 filename convention:
+    #   env name:     hopper-medium-v2
+    #   URL filename: hopper_medium-v2.hdf5  (underscore between env and dataset)
+    #   URL: http://rail.eecs.berkeley.edu/datasets/offline_rl/gym_mujoco_v2/hopper_medium-v2.hdf5
+    #
+    # Uses curl instead of Python urllib to avoid SJSU Proofpoint URL proxy.
     echo ""
     echo "Pre-downloading D4RL datasets (GPU nodes have no internet)..."
-    python -c "
-import os, urllib.request
-cache_dir = os.path.join(os.path.expanduser('~'), '.d4rl', 'datasets')
-os.makedirs(cache_dir, exist_ok=True)
-for name in ['hopper-medium-v2', 'halfcheetah-medium-v2', 'walker2d-medium-v2']:
-    path = os.path.join(cache_dir, f'{name}.hdf5')
-    if os.path.exists(path):
-        sz = os.path.getsize(path) / (1024*1024)
-        print(f'  {name}: already cached ({sz:.1f} MB)')
-    else:
-        url = f'http://rail.eecs.berkeley.edu/datasets/offline_rl/gym_mujoco_v2/{name}.hdf5'
-        print(f'  {name}: downloading from {url} ...')
-        urllib.request.urlretrieve(url, path)
-        sz = os.path.getsize(path) / (1024*1024)
-        print(f'  {name}: saved ({sz:.1f} MB)')
-"
+    CACHE_DIR="$HOME/.d4rl/datasets"
+    mkdir -p "$CACHE_DIR"
+
+    for ds_file in hopper_medium-v2.hdf5 halfcheetah_medium-v2.hdf5 walker2d_medium-v2.hdf5; do
+        FPATH="${CACHE_DIR}/${ds_file}"
+        if [ -f "$FPATH" ]; then
+            SIZE=$(du -h "$FPATH" | cut -f1)
+            echo "  ${ds_file}: already cached (${SIZE})"
+        else
+            URL="http://rail.eecs.berkeley.edu/datasets/offline_rl/gym_mujoco_v2/${ds_file}"
+            echo "  ${ds_file}: downloading from ${URL} ..."
+            curl -L -o "$FPATH" "$URL"
+            SIZE=$(du -h "$FPATH" | cut -f1)
+            echo "  ${ds_file}: saved (${SIZE})"
+        fi
+    done
 
     # Verify datasets were downloaded
     echo ""
     echo "Verifying dataset cache..."
-    CACHE_DIR="$HOME/.d4rl/datasets"
     MISSING=0
-    for ds in hopper-medium-v2 halfcheetah-medium-v2 walker2d-medium-v2; do
-        if [ -f "${CACHE_DIR}/${ds}.hdf5" ]; then
-            SIZE=$(du -h "${CACHE_DIR}/${ds}.hdf5" | cut -f1)
-            echo "  OK  ${ds}.hdf5 (${SIZE})"
+    for ds_file in hopper_medium-v2.hdf5 halfcheetah_medium-v2.hdf5 walker2d_medium-v2.hdf5; do
+        FPATH="${CACHE_DIR}/${ds_file}"
+        if [ -f "$FPATH" ]; then
+            SIZE=$(du -h "$FPATH" | cut -f1)
+            echo "  OK  ${ds_file} (${SIZE})"
         else
-            echo "  MISSING  ${ds}.hdf5"
+            echo "  MISSING  ${ds_file}"
             MISSING=$((MISSING + 1))
         fi
     done

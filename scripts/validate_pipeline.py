@@ -41,7 +41,54 @@ def test_core_imports():
     from tensorflow_probability.substrates import jax as tfp
     import gymnasium as gym
     import mujoco
-    print(f'         numpy={np.__version__}, jax={jax.__version__}, mujoco={mujoco.__version__}')
+    devices = jax.devices()
+    gpu_count = len([d for d in devices if d.platform == 'gpu'])
+    backend = f'GPU x{gpu_count}' if gpu_count > 0 else 'CPU only'
+    print(f'         numpy={np.__version__}, jax={jax.__version__}, mujoco={mujoco.__version__}, backend={backend}')
+
+
+def test_cuda_jaxlib():
+    """Check if CUDA-enabled jaxlib is installed for GPU acceleration.
+
+    Uses pip metadata (not jaxlib.__version__) because the Python version
+    string doesn't include the +cuda suffix even for CUDA builds.
+    """
+    import jaxlib
+    import jax
+    import subprocess
+
+    # Get version from pip metadata (includes +cuda suffix)
+    try:
+        result = subprocess.run(
+            ['pip', 'show', 'jaxlib'],
+            capture_output=True, text=True, timeout=10
+        )
+        pip_version = ''
+        for line in result.stdout.splitlines():
+            if line.lower().startswith('version:'):
+                pip_version = line.split(':', 1)[1].strip()
+                break
+    except Exception:
+        pip_version = jaxlib.__version__
+
+    has_cuda = 'cuda' in pip_version.lower()
+    devices = jax.devices()
+    gpu_devs = [d for d in devices if d.platform == 'gpu']
+
+    print(f'         jaxlib (pip): {pip_version}')
+    print(f'         jaxlib (python): {jaxlib.__version__}')
+    print(f'         CUDA build: {has_cuda}')
+    print(f'         GPU devices: {len(gpu_devs)}')
+
+    if gpu_devs:
+        for d in gpu_devs:
+            print(f'         -> {d}')
+    elif has_cuda:
+        print('         NOTE: CUDA jaxlib installed but no GPU on this node (login node).')
+        print('         GPU will be used automatically on batch GPU nodes.')
+    else:
+        print('         WARNING: CPU-only jaxlib. Training will be ~15x slower.')
+        print('         This is OK — training still works, just slower (~10h vs ~2h).')
 
 
 def test_iql_imports():
@@ -155,16 +202,26 @@ def test_sample_actions():
 
 
 def test_datasets_cached():
-    """Check that D4RL datasets are downloaded and cached."""
+    """Check that D4RL datasets are downloaded and cached.
+
+    D4RL v2 filename convention:
+      env name:     hopper-medium-v2
+      cache file:   hopper_medium-v2.hdf5  (underscore between env and dataset)
+    """
+    # Import the helper to get the correct filename
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from iql.dataset_utils import _d4rl_url_filename
+
     cache_dir = os.path.join(os.path.expanduser('~'), '.d4rl', 'datasets')
     missing = []
     for env_name in ['hopper-medium-v2', 'halfcheetah-medium-v2', 'walker2d-medium-v2']:
-        path = os.path.join(cache_dir, f'{env_name}.hdf5')
+        filename = _d4rl_url_filename(env_name)
+        path = os.path.join(cache_dir, filename)
         if os.path.exists(path):
             size_mb = os.path.getsize(path) / (1024 * 1024)
-            print(f'         {env_name}: {size_mb:.1f} MB')
+            print(f'         {env_name} -> {filename}: {size_mb:.1f} MB')
         else:
-            missing.append(env_name)
+            missing.append(f'{env_name} ({filename})')
     if missing:
         raise FileNotFoundError(
             f'Missing datasets: {missing}. Run iql-setup on the login node first.'
@@ -179,6 +236,7 @@ if __name__ == '__main__':
     print()
 
     step('Core imports (numpy, jax, tfp, gymnasium, mujoco)', test_core_imports)
+    step('CUDA jaxlib installed (GPU acceleration)', test_cuda_jaxlib)
     step('IQL package imports', test_iql_imports)
     step('All 4 shift wrappers', test_wrappers)
     step('JAX JIT + TFP distributions', test_jax_tfp)
