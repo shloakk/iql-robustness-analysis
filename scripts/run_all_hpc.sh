@@ -70,6 +70,7 @@ echo "============================================"
 activate_env() {
     module load python3 2>/dev/null || true
     module load cuda 2>/dev/null || true
+    module load cudnn 2>/dev/null || true
 
     if [ -f "${VENV_DIR}/bin/activate" ]; then
         source "${VENV_DIR}/bin/activate"
@@ -85,6 +86,12 @@ activate_env() {
     export PYTHONPATH="${PROJECT_DIR}:${PYTHONPATH:-}"
     # Suppress D4RL warnings for envs we don't use (mujoco_py, flow, etc.)
     export D4RL_SUPPRESS_IMPORT_ERROR=1
+
+    # Help JAX find cuDNN from the nvidia-cudnn-cu12 pip package
+    CUDNN_PATH=$(python -c "import nvidia.cudnn; import os; print(os.path.dirname(nvidia.cudnn.__file__))" 2>/dev/null)
+    if [ -n "$CUDNN_PATH" ]; then
+        export LD_LIBRARY_PATH="${CUDNN_PATH}/lib:${LD_LIBRARY_PATH:-}"
+    fi
 
     # GPU check — report JAX backend immediately
     echo ""
@@ -227,6 +234,13 @@ setup_environment() {
         pip install --no-index --find-links="$WHEEL_DIR" "jaxlib==${JAX_VER}" 2>/dev/null || \
             pip install "jaxlib==${JAX_VER}" 2>/dev/null || true
         echo "  Training will work but be ~15x slower without GPU."
+    fi
+
+    # Install nvidia-cudnn-cu12 for cuDNN runtime (needed by CUDA jaxlib)
+    if [ "$JAXLIB_INSTALLED" -eq 1 ]; then
+        echo ""
+        echo "  Installing nvidia-cudnn-cu12 (cuDNN runtime)..."
+        pip install nvidia-cudnn-cu12 2>&1 || echo "  WARNING: nvidia-cudnn-cu12 install failed"
     fi
 
     # Re-enable exit-on-error
