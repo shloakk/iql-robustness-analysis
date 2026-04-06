@@ -192,16 +192,36 @@ for name in ['hopper-medium-v2', 'halfcheetah-medium-v2', 'walker2d-medium-v2']:
         print(f'  {name}: saved ({sz:.1f} MB)')
 "
 
-    # Run full verification
+    # Verify datasets were downloaded
     echo ""
-    echo "Running verification..."
-    python scripts/verify_env.py
+    echo "Verifying dataset cache..."
+    CACHE_DIR="$HOME/.d4rl/datasets"
+    MISSING=0
+    for ds in hopper-medium-v2 halfcheetah-medium-v2 walker2d-medium-v2; do
+        if [ -f "${CACHE_DIR}/${ds}.hdf5" ]; then
+            SIZE=$(du -h "${CACHE_DIR}/${ds}.hdf5" | cut -f1)
+            echo "  OK  ${ds}.hdf5 (${SIZE})"
+        else
+            echo "  MISSING  ${ds}.hdf5"
+            MISSING=$((MISSING + 1))
+        fi
+    done
+    if [ "$MISSING" -gt 0 ]; then
+        echo "ERROR: ${MISSING} dataset(s) missing. Cannot proceed."
+        exit 1
+    fi
+    echo "All datasets cached."
+
+    # Run full pipeline validation
+    echo ""
+    echo "Running full pipeline validation..."
+    python scripts/validate_pipeline.py
 
     echo ""
     echo "============================================"
     echo "Setup complete. Next steps:"
-    echo "  python scripts/verify_env.py   # re-verify anytime"
-    echo "  sbatch scripts/run_all_hpc.sh  # submit full pipeline"
+    echo "  python scripts/validate_pipeline.py  # re-validate anytime"
+    echo "  sbatch scripts/run_all_hpc.sh        # submit full pipeline"
     echo "============================================"
 }
 
