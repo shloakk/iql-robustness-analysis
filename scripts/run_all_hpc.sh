@@ -144,10 +144,16 @@ setup_environment() {
     WHEEL_DIR="${PROJECT_DIR}/.wheels"
     mkdir -p "$WHEEL_DIR"
 
+    # JAX version strategy:
+    #   jaxlib 0.4.29 is the NEWEST version with manylinux2014 CUDA wheels
+    #   (compatible with SJSU HPC GLIBC 2.17). Versions 0.4.30+ require GLIBC 2.28.
+    #   jax 0.4.29 is compatible with tensorflow-probability 0.23.0.
+    JAX_VER="0.4.29"
+
     echo "  Downloading binary wheels..."
     pip download --only-binary=:all: --dest "$WHEEL_DIR" \
         numpy==1.26.4 scipy==1.13.1 h5py==3.11.0 \
-        jax==0.4.35 ml_dtypes==0.4.1 \
+        "jax==${JAX_VER}" ml_dtypes==0.4.1 \
         mujoco==3.1.6 matplotlib==3.9.2 \
         flax==0.8.5 optax==0.2.3 \
         tensorflow-probability==0.23.0
@@ -156,62 +162,61 @@ setup_environment() {
     echo "  Installing from downloaded wheels..."
     pip install --no-index --find-links="$WHEEL_DIR" \
         numpy==1.26.4 scipy==1.13.1 h5py==3.11.0 \
-        jax==0.4.35 ml_dtypes==0.4.1 \
+        "jax==${JAX_VER}" ml_dtypes==0.4.1 \
         mujoco==3.1.6 matplotlib==3.9.2 \
         flax==0.8.5 optax==0.2.3 \
         tensorflow-probability==0.23.0
 
     # Install jaxlib with CUDA support for GPU acceleration.
-    # Strategy: always try CUDA 12 first (works on login node without GPU),
-    # then CUDA 11, then fall back to CPU-only.
-    # The CUDA jaxlib can be installed on a CPU-only machine — JAX will
-    # simply use GPU when one becomes available on the batch node.
+    # jaxlib 0.4.29 is the last version with manylinux2014 CUDA wheels
+    # (GLIBC 2.17 compatible). The wheel is ~600MB and includes CUDA+cuDNN.
     echo ""
-    echo "  Installing jaxlib with CUDA support..."
-    echo "  (Trying CUDA 12 -> CUDA 11 -> CPU-only)"
+    echo "  Installing jaxlib ${JAX_VER} with CUDA 12 support..."
+    echo "  (manylinux2014 wheel — compatible with GLIBC 2.17)"
     echo ""
 
     JAXLIB_INSTALLED=0
 
     # Temporarily disable exit-on-error for CUDA install attempts
-    # (pip install will fail if CUDA wheels are incompatible with GLIBC 2.17)
     set +e
 
-    # Try CUDA 12 (most common on modern HPC)
+    # Try CUDA 12 with manylinux2014 (GLIBC 2.17 compatible)
     if [ "$JAXLIB_INSTALLED" -eq 0 ]; then
-        echo "  Attempting: jaxlib==0.4.35+cuda12 ..."
-        pip install "jax[cuda12_pip]==0.4.35" \
+        echo "  Downloading CUDA 12 wheel (this may take a few minutes)..."
+        pip install "jaxlib==${JAX_VER}+cuda12.cudnn89" \
             -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html \
             2>&1
-        if python -c "import jaxlib; v=jaxlib.__version__; print(v); assert 'cuda' in v.lower() or 'cu12' in v.lower()" 2>/dev/null; then
-            echo "  SUCCESS: CUDA 12 jaxlib installed"
+        if python -c "import jaxlib; v=jaxlib.__version__; print(f'  jaxlib: {v}'); assert 'cuda' in v.lower()" 2>/dev/null; then
+            echo "  SUCCESS: CUDA 12 jaxlib installed (manylinux2014)"
             JAXLIB_INSTALLED=1
         else
-            echo "  CUDA 12 attempt did not produce a CUDA jaxlib."
+            echo "  CUDA 12 install did not produce a CUDA jaxlib."
         fi
     fi
 
-    # Try CUDA 11
+    # Try CUDA 11 fallback
     if [ "$JAXLIB_INSTALLED" -eq 0 ]; then
         echo ""
-        echo "  Attempting: jaxlib==0.4.35+cuda11 ..."
-        pip install "jax[cuda11_pip]==0.4.35" \
+        echo "  Trying CUDA 11..."
+        pip install "jaxlib==${JAX_VER}+cuda11.cudnn86" \
             -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html \
             2>&1
-        if python -c "import jaxlib; v=jaxlib.__version__; print(v); assert 'cuda' in v.lower() or 'cu11' in v.lower()" 2>/dev/null; then
-            echo "  SUCCESS: CUDA 11 jaxlib installed"
+        if python -c "import jaxlib; v=jaxlib.__version__; print(f'  jaxlib: {v}'); assert 'cuda' in v.lower()" 2>/dev/null; then
+            echo "  SUCCESS: CUDA 11 jaxlib installed (manylinux2014)"
             JAXLIB_INSTALLED=1
         else
-            echo "  CUDA 11 attempt did not produce a CUDA jaxlib."
+            echo "  CUDA 11 install did not produce a CUDA jaxlib."
         fi
     fi
 
-    # Fallback: CPU-only (jaxlib was already installed from .wheels earlier)
+    # Fallback: CPU-only
     if [ "$JAXLIB_INSTALLED" -eq 0 ]; then
         echo ""
-        echo "  WARNING: CUDA jaxlib install failed."
-        echo "  Using CPU-only jaxlib (already installed). Training will be slower."
-        echo "  The SJSU HPC may have GLIBC 2.17 which is too old for CUDA JAX wheels."
+        echo "  WARNING: CUDA jaxlib install failed. Using CPU-only."
+        pip download --only-binary=:all: --dest "$WHEEL_DIR" "jaxlib==${JAX_VER}" 2>/dev/null || true
+        pip install --no-index --find-links="$WHEEL_DIR" "jaxlib==${JAX_VER}" || \
+            pip install "jaxlib==${JAX_VER}"
+        echo "  Training will work but be ~15x slower without GPU."
     fi
 
     # Re-enable exit-on-error
