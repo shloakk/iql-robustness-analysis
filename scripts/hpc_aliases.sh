@@ -16,6 +16,7 @@ alias killall='scancel -u $USER'
 # ─── Quick submit ────────────────────────────────────────────────────
 alias iql-setup='bash scripts/run_all_hpc.sh setup'
 alias iql-verify='python scripts/verify_env.py'
+alias iql-validate='python scripts/validate_pipeline.py'
 alias iql-run='sbatch scripts/run_all_hpc.sh'
 alias iql-train='sbatch scripts/run_all_hpc.sh train'
 alias iql-eval='sbatch scripts/run_all_hpc.sh eval'
