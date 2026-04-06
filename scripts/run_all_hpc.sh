@@ -162,41 +162,54 @@ setup_environment() {
         tensorflow-probability==0.23.0
 
     # Install jaxlib with CUDA support for GPU acceleration.
-    # Detect CUDA version from the module system and install the matching wheel.
-    # Falls back to CPU-only jaxlib if CUDA is not available.
+    # Strategy: always try CUDA 12 first (works on login node without GPU),
+    # then CUDA 11, then fall back to CPU-only.
+    # The CUDA jaxlib can be installed on a CPU-only machine — JAX will
+    # simply use GPU when one becomes available on the batch node.
     echo ""
     echo "  Installing jaxlib with CUDA support..."
-    module load cuda 2>/dev/null || true
-    CUDA_VER=""
-    if command -v nvcc &>/dev/null; then
-        CUDA_VER=$(nvcc --version 2>/dev/null | grep -oP 'release \K[0-9]+\.[0-9]+' | head -1)
-    elif [ -n "$CUDA_HOME" ]; then
-        CUDA_VER=$(ls "$CUDA_HOME/lib64/libcudart.so."* 2>/dev/null | grep -oP '[0-9]+\.[0-9]+' | head -1)
+    echo "  (Trying CUDA 12 -> CUDA 11 -> CPU-only)"
+    echo ""
+
+    JAXLIB_INSTALLED=0
+
+    # Try CUDA 12 (most common on modern HPC)
+    if [ "$JAXLIB_INSTALLED" -eq 0 ]; then
+        echo "  Attempting: jaxlib==0.4.35+cuda12 ..."
+        pip install "jax[cuda12_pip]==0.4.35" \
+            -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html \
+            2>&1 | tail -3
+        if python -c "import jaxlib; print(jaxlib.__version__)" 2>/dev/null | grep -q "cuda"; then
+            echo "  SUCCESS: CUDA 12 jaxlib installed"
+            JAXLIB_INSTALLED=1
+        fi
     fi
 
-    if [ -n "$CUDA_VER" ]; then
-        CUDA_MAJOR=$(echo "$CUDA_VER" | cut -d. -f1)
-        echo "  Detected CUDA ${CUDA_VER} (major: ${CUDA_MAJOR})"
-        if [ "$CUDA_MAJOR" -ge 12 ]; then
-            echo "  Installing jaxlib with CUDA 12 support..."
-            pip install "jaxlib[cuda12]==0.4.35" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html 2>/dev/null || \
-                pip install jaxlib==0.4.35 -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html 2>/dev/null || \
-                { echo "  WARNING: CUDA jaxlib install failed, using CPU-only"; pip install --no-index --find-links="$WHEEL_DIR" jaxlib==0.4.35; }
-        elif [ "$CUDA_MAJOR" -ge 11 ]; then
-            echo "  Installing jaxlib with CUDA 11 support..."
-            pip install "jaxlib[cuda11_pip]==0.4.35" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html 2>/dev/null || \
-                pip install jaxlib==0.4.35 -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html 2>/dev/null || \
-                { echo "  WARNING: CUDA jaxlib install failed, using CPU-only"; pip install --no-index --find-links="$WHEEL_DIR" jaxlib==0.4.35; }
-        else
-            echo "  CUDA ${CUDA_VER} too old for JAX GPU. Installing CPU-only jaxlib."
-            pip download --only-binary=:all: --dest "$WHEEL_DIR" jaxlib==0.4.35 2>/dev/null || true
-            pip install --no-index --find-links="$WHEEL_DIR" jaxlib==0.4.35
+    # Try CUDA 11
+    if [ "$JAXLIB_INSTALLED" -eq 0 ]; then
+        echo "  Attempting: jaxlib==0.4.35+cuda11 ..."
+        pip install "jax[cuda11_pip]==0.4.35" \
+            -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html \
+            2>&1 | tail -3
+        if python -c "import jaxlib; print(jaxlib.__version__)" 2>/dev/null | grep -q "cuda"; then
+            echo "  SUCCESS: CUDA 11 jaxlib installed"
+            JAXLIB_INSTALLED=1
         fi
-    else
-        echo "  No CUDA detected. Installing CPU-only jaxlib."
-        pip download --only-binary=:all: --dest "$WHEEL_DIR" jaxlib==0.4.35 2>/dev/null || true
-        pip install --no-index --find-links="$WHEEL_DIR" jaxlib==0.4.35
     fi
+
+    # Fallback: CPU-only
+    if [ "$JAXLIB_INSTALLED" -eq 0 ]; then
+        echo "  CUDA jaxlib install failed. Installing CPU-only jaxlib..."
+        pip download --only-binary=:all: --dest "$WHEEL_DIR" jaxlib==0.4.35 2>/dev/null || true
+        pip install --no-index --find-links="$WHEEL_DIR" jaxlib==0.4.35 || \
+            pip install jaxlib==0.4.35
+        echo "  WARNING: Using CPU-only jaxlib. Training will be slower."
+    fi
+
+    # Report what was installed
+    echo ""
+    echo "  Installed jaxlib version:"
+    pip show jaxlib 2>/dev/null | grep -i version
 
     # Pure Python packages — install normally from PyPI
     echo ""

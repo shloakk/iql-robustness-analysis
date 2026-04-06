@@ -47,6 +47,32 @@ def test_core_imports():
     print(f'         numpy={np.__version__}, jax={jax.__version__}, mujoco={mujoco.__version__}, backend={backend}')
 
 
+def test_cuda_jaxlib():
+    """Verify CUDA-enabled jaxlib is installed for GPU acceleration."""
+    import jaxlib
+    import jax
+    version = jaxlib.__version__
+    has_cuda = 'cuda' in version.lower()
+    devices = jax.devices()
+    gpu_devs = [d for d in devices if d.platform == 'gpu']
+
+    print(f'         jaxlib version: {version}')
+    print(f'         CUDA in version string: {has_cuda}')
+    print(f'         GPU devices found: {len(gpu_devs)}')
+
+    if not has_cuda:
+        raise RuntimeError(
+            f'jaxlib {version} is CPU-only (no CUDA). '
+            f'Re-run setup: cleanvenv && bash scripts/run_all_hpc.sh setup'
+        )
+    if gpu_devs:
+        for d in gpu_devs:
+            print(f'         -> {d}')
+    else:
+        print('         NOTE: No GPU on this node (login node). '
+              'GPU will be used on batch nodes.')
+
+
 def test_iql_imports():
     from iql.learner import Learner
     from iql.policy import sample_actions
@@ -192,6 +218,7 @@ if __name__ == '__main__':
     print()
 
     step('Core imports (numpy, jax, tfp, gymnasium, mujoco)', test_core_imports)
+    step('CUDA jaxlib installed (GPU acceleration)', test_cuda_jaxlib)
     step('IQL package imports', test_iql_imports)
     step('All 4 shift wrappers', test_wrappers)
     step('JAX JIT + TFP distributions', test_jax_tfp)
