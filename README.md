@@ -162,7 +162,13 @@ Pending — run `./scripts/compute_robustness.py` after shift evaluation complet
 
 ### Ablation Study (Expectile τ)
 
-Pending — run `./scripts/run_all_hpc.sh` on HPC to generate.
+Evaluation covers gravity shifts and observation noise shifts. Results are stored in:
+
+- `results/results_baseline_iql.csv` — baseline IQL evaluation results across shift types and levels
+- `results/results_ensemble_iql.csv` — Q-ensemble IQL evaluation results across shift types and levels
+- `results/results_comparison.png` — side-by-side comparison visualization of baseline vs. ensemble under shift
+
+Pending full runs — submit `./scripts/run_all_hpc.sh` on HPC to generate complete results.
 
 ---
 
@@ -170,56 +176,60 @@ Pending — run `./scripts/run_all_hpc.sh` on HPC to generate.
 
 ```
 iql-robustness-analysis/
-├── iql/                          # Core IQL implementation
-│   ├── actor.py                  #   Actor update (advantage-weighted BC)
-│   ├── critic.py                 #   Critic update (2 or 3 Q-networks)
-│   ├── common.py                 #   MLP, Model, Batch definitions
-│   ├── learner.py                #   Training loop + checkpointing
-│   ├── policy.py                 #   NormalTanhPolicy + sampling
-│   ├── value_net.py              #   DoubleCritic, TripleCritic, ValueCritic
-│   └── dataset_utils.py          #   D4RL dataset loading
-│
-├── evaluation/                   # Policy evaluation
-│   └── evaluate.py
-│
-├── wrappers/                     # Environment wrappers
-│   ├── episode_monitor.py        #   Episode return/length tracking
-│   ├── single_precision.py       #   Float32 casting
-│   ├── gravity_shift.py          #   Gravity scaling
-│   ├── observation_noise.py      #   Gaussian observation noise
-│   ├── friction_shift.py         #   Friction scaling
-│   └── reward_perturbation.py    #   Reward noise/scaling
-│
-├── configs/                      # Hyperparameter configs
-│   ├── mujoco_config.py          #   τ=0.7, β=3.0
-│   ├── antmaze_config.py         #   τ=0.9, β=10.0
-│   └── kitchen_config.py         #   τ=0.7, β=0.5, dropout=0.1
-│
-├── scripts/                      # Training & evaluation
-│   ├── train_offline.py          #   Offline training (--num_critics flag)
-│   ├── train_finetune.py         #   Online finetuning
-│   ├── evaluate_shift.py         #   Evaluate under shift (all 4 types)
-│   ├── compute_robustness.py     #   Compute metrics from CSVs
-│   └── run_all_hpc.sh            #   Submit all experiments to SLURM
-│
-├── notebooks/                    # Jupyter notebooks
-│   ├── 01_train_baseline.ipynb       #   Train 2Q on all envs
-│   ├── 02_train_ensemble.ipynb       #   Train 3Q on all envs
-│   ├── 03_evaluate_shift.ipynb       #   Evaluate under shift
-│   ├── 04_analyze_results.ipynb      #   Generate plots and tables
-│   └── uday_q_ensemble_iql.ipynb     #   Q-ensemble implementation + robustness experiments (Uday)
-│
-├── results/                      # Experiment outputs
-│   ├── results_baseline_iql.csv          #   Baseline IQL training scores (hopper)
-│   ├── results_ensemble_iql.csv          #   Q-ensemble training scores (hopper)
-│   ├── results_comparison.png            #   Baseline vs ensemble learning curves
-│   ├── results_gravity_shift.csv         #   Robustness under gravity shift (hopper)
-│   ├── results_noise_shift.csv           #   Robustness under observation noise (hopper)
-│   └── results_shift_comparison.png      #   Gravity and noise shift plots
-│
-├── requirements.txt
+├── configs/
+│   ├── antmaze_config.py          # AntMaze config (unused — placeholder)
+│   ├── antmaze_finetune_config.py # AntMaze fine-tuning config
+│   ├── kitchen_config.py          # Kitchen config (unused — placeholder)
+│   └── mujoco_config.py           # MuJoCo locomotion config (primary)
+├── evaluation/
+│   ├── __init__.py
+│   └── evaluate.py                # Rollout evaluation loop
+├── iql/
+│   ├── __init__.py
+│   ├── actor.py                   # Actor network (Gaussian policy)
+│   ├── common.py                  # Batch, MLP, Model, type aliases
+│   ├── critic.py                  # Double/Triple-Q critic
+│   ├── dataset_utils.py           # D4RL dataset loading utilities
+│   ├── learner.py                 # IQL training loop + checkpointing
+│   ├── policy.py                  # NormalTanhPolicy + action sampling
+│   └── value_net.py               # DoubleCritic, TripleCritic, ValueCritic
+├── notebooks/
+│   ├── 01_train.ipynb             # Train both 2Q and 3Q on all envs
+│   ├── 02_evaluate_shift.ipynb    # Evaluate under distribution shifts
+│   ├── 03_analyze_results.ipynb   # Generate plots and tables
+│   ├── uday_q_ensemble_iql.ipynb  # Standalone Q-ensemble (Uday)
+│   └── zz_iql_shift_evaluation.ipynb  # Archived: early shift evaluation
+├── results/
+│   ├── results_baseline_iql.csv   # Baseline IQL scores (hopper)
+│   ├── results_ensemble_iql.csv   # Q-ensemble scores (hopper)
+│   ├── results_comparison.png     # Baseline vs ensemble curves
+│   ├── results_gravity_shift.csv  # Gravity shift robustness
+│   ├── results_noise_shift.csv    # Observation noise robustness
+│   └── results_shift_comparison.png  # Shift comparison plots
+├── scripts/
+│   ├── compute_robustness.py      # Compute robustness metrics from CSVs
+│   ├── evaluate_shift.py          # Evaluate agent under shifts
+│   ├── hpc_aliases.sh             # Shell aliases for HPC workflow
+│   ├── run_all_hpc.sh             # SLURM batch script (setup/train/eval)
+│   ├── train_finetune.py          # Online fine-tuning
+│   ├── train_offline.py           # Offline IQL training
+│   ├── validate_pipeline.py       # Full pipeline validation (10 steps)
+│   └── verify_env.py              # Quick dependency check
+├── wrappers/
+│   ├── __init__.py
+│   ├── common.py                  # TimeStep type alias
+│   ├── episode_monitor.py         # Episode return/length tracking
+│   ├── friction_shift.py          # Joint friction perturbation
+│   ├── gravity_shift.py           # Gravity vector perturbation
+│   ├── observation_noise.py       # Gaussian observation noise
+│   ├── reward_perturbation.py     # Reward scaling/noise
+│   └── single_precision.py        # Float64 → Float32 conversion
+├── .gitignore
 ├── LICENSE
-└── .gitignore
+├── README.md
+├── requirements.txt               # General dependencies (pip)
+├── requirements-hpc.txt           # Pinned HPC dependencies (SJSU HPC)
+└── setup.py                       # Package installation
 ```
 
 ---
@@ -244,7 +254,12 @@ cd iql-robustness-analysis
 # 3. One-time setup (on login node — downloads pre-built wheels)
 bash scripts/run_all_hpc.sh setup
 
-# 4. Submit experiments to GPU nodes
+# 4. Verify environment and validate pipeline before submitting
+source scripts/hpc_aliases.sh       # load convenience aliases
+iql-verify                          # quick dependency/environment check
+iql-validate                        # full pipeline validation (pre-HPC)
+
+# 5. Submit experiments to GPU nodes
 mkdir -p logs
 sbatch scripts/run_all_hpc.sh          # full pipeline
 # or run individual steps:
@@ -252,10 +267,12 @@ sbatch scripts/run_all_hpc.sh          # full pipeline
 # sbatch scripts/run_all_hpc.sh eval     # shift evaluation only
 # sbatch scripts/run_all_hpc.sh analyze  # compute metrics only
 
-# 5. Monitor
+# 6. Monitor
 squeue -u $USER                        # check job status
 tail -f logs/slurm_<job_id>.out        # watch output
 ```
+
+The recommended workflow is: **verify → validate → sbatch**. `scripts/verify_env.py` performs a quick check that dependencies are installed and the environment is functional. `scripts/validate_pipeline.py` runs a comprehensive end-to-end pipeline validation (training, evaluation, metrics) with minimal steps to catch issues before committing to a full SLURM job.
 
 The setup step creates a Python venv using the system Python 3.11 and installs
 all dependencies as pre-built binary wheels (no compilation needed). This only
@@ -282,13 +299,16 @@ source scripts/hpc_aliases.sh    # load once per session
 
 | Alias | Command |
 |---|---|
+| `iql-verify` | Quick environment/dependency check (`verify_env.py`) |
+| `iql-validate` | Full pipeline validation (`validate_pipeline.py`) |
+| `iql-train` | Submit training only |
+| `iql-eval` | Submit evaluation only |
+| `iql-robust` | Compute robustness metrics |
 | `jobs` | Check your job status |
 | `myjobs` | Detailed job listing |
 | `killall` | Cancel all your jobs |
 | `iql-setup` | One-time environment setup |
 | `iql-run` | Submit full pipeline |
-| `iql-train` | Submit training only |
-| `iql-eval` | Submit evaluation only |
 | `iql-analyze` | Submit analysis only |
 | `lastlog` | Tail the latest output log |
 | `lasterr` | Tail the latest error log |
@@ -330,6 +350,15 @@ python scripts/compute_robustness.py --results_dir=results/ --env_name=hopper-me
 | Training steps | 300,000 |
 | Optimizer | Adam |
 | Actor LR schedule | Cosine decay |
+
+---
+
+## Known Issues / Technical Debt
+
+- **Duplicate `Batch` namedtuple:** `Batch` is defined in both `iql/common.py` and `iql/dataset_utils.py` (identical definitions). Consolidation into a single source is planned.
+- **Outdated JAX version pin:** `requirements.txt` pins JAX to `<= 0.2.21`, which is outdated. Use `requirements-hpc.txt` for current pinned versions on SJSU HPC.
+- **Placeholder configs:** `configs/antmaze_config.py` and `configs/kitchen_config.py` are placeholder configurations not yet integrated into the training/evaluation pipeline.
+- **Overlapping verification scripts:** `scripts/verify_env.py` (quick dependency check) and `scripts/validate_pipeline.py` (comprehensive pipeline validation) have overlapping functionality. Consolidation is planned.
 
 ---
 
