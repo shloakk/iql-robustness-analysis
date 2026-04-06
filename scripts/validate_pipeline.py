@@ -50,29 +50,44 @@ def test_core_imports():
 def test_cuda_jaxlib():
     """Check if CUDA-enabled jaxlib is installed for GPU acceleration.
 
-    This is a WARNING check, not a hard failure — GLIBC 2.17 on SJSU HPC
-    may not support CUDA JAX wheels. Training still works on CPU, just slower.
+    Uses pip metadata (not jaxlib.__version__) because the Python version
+    string doesn't include the +cuda suffix even for CUDA builds.
     """
     import jaxlib
     import jax
-    version = jaxlib.__version__
-    has_cuda = 'cuda' in version.lower() or 'cu1' in version.lower()
+    import subprocess
+
+    # Get version from pip metadata (includes +cuda suffix)
+    try:
+        result = subprocess.run(
+            ['pip', 'show', 'jaxlib'],
+            capture_output=True, text=True, timeout=10
+        )
+        pip_version = ''
+        for line in result.stdout.splitlines():
+            if line.lower().startswith('version:'):
+                pip_version = line.split(':', 1)[1].strip()
+                break
+    except Exception:
+        pip_version = jaxlib.__version__
+
+    has_cuda = 'cuda' in pip_version.lower()
     devices = jax.devices()
     gpu_devs = [d for d in devices if d.platform == 'gpu']
 
-    print(f'         jaxlib version: {version}')
-    print(f'         CUDA in version: {has_cuda}')
+    print(f'         jaxlib (pip): {pip_version}')
+    print(f'         jaxlib (python): {jaxlib.__version__}')
+    print(f'         CUDA build: {has_cuda}')
     print(f'         GPU devices: {len(gpu_devs)}')
 
     if gpu_devs:
         for d in gpu_devs:
             print(f'         -> {d}')
     elif has_cuda:
-        print('         NOTE: CUDA jaxlib installed but no GPU on this node.')
-        print('         GPU will be used automatically on batch nodes.')
+        print('         NOTE: CUDA jaxlib installed but no GPU on this node (login node).')
+        print('         GPU will be used automatically on batch GPU nodes.')
     else:
         print('         WARNING: CPU-only jaxlib. Training will be ~15x slower.')
-        print('         SJSU HPC GLIBC 2.17 may not support CUDA JAX wheels.')
         print('         This is OK — training still works, just slower (~10h vs ~2h).')
 
 

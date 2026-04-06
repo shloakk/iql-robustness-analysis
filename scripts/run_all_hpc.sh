@@ -185,12 +185,17 @@ setup_environment() {
     # Temporarily disable exit-on-error for CUDA install attempts
     set +e
 
-    # Method 1: pip install with -f flag (works if network doesn't mangle URLs)
+    # Method 1: pip install with -f flag
     echo "  Attempting pip install jaxlib==${JAX_VER}+cuda12.cudnn91 ..."
     pip install "jaxlib==${JAX_VER}+cuda12.cudnn91" \
         -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html \
         2>&1
-    if python -c "import jaxlib; v=jaxlib.__version__; print(f'  jaxlib: {v}'); assert 'cuda' in v.lower()" 2>/dev/null; then
+
+    # Check if CUDA jaxlib is installed (pip metadata shows +cuda even if
+    # Python's jaxlib.__version__ doesn't include the suffix)
+    INSTALLED_VER=$(pip show jaxlib 2>/dev/null | grep -i "^Version:" | awk '{print $2}')
+    echo "  Installed: ${INSTALLED_VER}"
+    if echo "$INSTALLED_VER" | grep -qi "cuda"; then
         echo "  SUCCESS: CUDA 12 jaxlib installed via pip"
         JAXLIB_INSTALLED=1
     fi
@@ -205,8 +210,10 @@ setup_environment() {
         if [ -f "$CUDA_WHEEL" ]; then
             SIZE=$(du -h "$CUDA_WHEEL" | cut -f1)
             echo "  Downloaded: ${SIZE}"
-            pip install --force-reinstall "$CUDA_WHEEL" 2>&1
-            if python -c "import jaxlib; v=jaxlib.__version__; print(f'  jaxlib: {v}'); assert 'cuda' in v.lower()" 2>/dev/null; then
+            pip install "$CUDA_WHEEL" 2>&1
+            INSTALLED_VER=$(pip show jaxlib 2>/dev/null | grep -i "^Version:" | awk '{print $2}')
+            echo "  Installed: ${INSTALLED_VER}"
+            if echo "$INSTALLED_VER" | grep -qi "cuda"; then
                 echo "  SUCCESS: CUDA 12 jaxlib installed via curl"
                 JAXLIB_INSTALLED=1
             fi
