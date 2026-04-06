@@ -154,6 +154,23 @@ def test_sample_actions():
     assert actions.shape == (3,), f'Wrong action shape: {actions.shape}'
 
 
+def test_datasets_cached():
+    """Check that D4RL datasets are downloaded and cached."""
+    cache_dir = os.path.join(os.path.expanduser('~'), '.d4rl', 'datasets')
+    missing = []
+    for env_name in ['hopper-medium-v2', 'halfcheetah-medium-v2', 'walker2d-medium-v2']:
+        path = os.path.join(cache_dir, f'{env_name}.hdf5')
+        if os.path.exists(path):
+            size_mb = os.path.getsize(path) / (1024 * 1024)
+            print(f'         {env_name}: {size_mb:.1f} MB')
+        else:
+            missing.append(env_name)
+    if missing:
+        raise FileNotFoundError(
+            f'Missing datasets: {missing}. Run iql-setup on the login node first.'
+        )
+
+
 if __name__ == '__main__':
     print('=' * 60)
     print('IQL Pipeline Validation')
@@ -169,6 +186,7 @@ if __name__ == '__main__':
     step('Learner init (3Q TripleCritic)', test_learner_3q)
     step('Evaluation loop (1 episode)', test_evaluation)
     step('Sample actions from policy', test_sample_actions)
+    step('D4RL datasets cached locally', test_datasets_cached)
 
     print()
     print('=' * 60)
