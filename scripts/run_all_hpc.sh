@@ -236,15 +236,18 @@ setup_environment() {
         echo "  Training will work but be ~15x slower without GPU."
     fi
 
-    # Install NVIDIA CUDA runtime packages (cuDNN, cuBLAS, etc.)
-    # These provide the shared libraries that CUDA jaxlib needs at runtime.
-    # Must use --extra-index-url to access pypi.nvidia.com for the real wheels.
+    # Install nvidia-cudnn-cu12 (cuDNN runtime library).
+    # The CUDA jaxlib wheel needs cuDNN at runtime. cuBLAS and CUDA runtime
+    # are typically provided by the GPU node's CUDA driver (module load cuda).
+    # Must use --extra-index-url to access pypi.nvidia.com for the real wheel.
+    # Note: nvidia-cublas-cu12 requires manylinux_2_27 which is incompatible
+    # with SJSU HPC GLIBC 2.17, but cuBLAS comes with the CUDA module.
     if [ "$JAXLIB_INSTALLED" -eq 1 ]; then
         echo ""
-        echo "  Installing NVIDIA CUDA runtime packages..."
+        echo "  Installing nvidia-cudnn-cu12 (cuDNN runtime, ~560MB)..."
         pip install --extra-index-url https://pypi.nvidia.com \
-            nvidia-cudnn-cu12 nvidia-cublas-cu12 nvidia-cuda-runtime-cu12 \
-            2>&1 || echo "  WARNING: NVIDIA runtime packages install failed"
+            --no-deps nvidia-cudnn-cu12 \
+            2>&1 || echo "  WARNING: nvidia-cudnn-cu12 install failed"
     fi
 
     # Re-enable exit-on-error
