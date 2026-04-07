@@ -189,7 +189,7 @@ We ablated the expectile hyperparameter τ ∈ {0.5, 0.7, 0.8, 0.9} for both 2Q 
 | 0.9 | 2Q | 1603 | 0.668 | 0.151 | 0.714 | 0.001 |
 | 0.9 | 3Q | 1688 | 0.739 | 0.156 | 0.734 | **0.001** |
 
-> **Hopper summary:** 2Q at τ=0.5 is the most robust configuration overall (lowest gravity and noise AUDC), but 3Q at τ=0.7 achieves the best friction robustness. Higher τ consistently degrades robustness — τ=0.8 and τ=0.9 show the worst AUDC across all shifts. The trade-off is clear: τ=0.5 sacrifices ~15% baseline return for ~30% better robustness.
+> **Hopper summary:** Lower τ improves robustness: 2Q at τ=0.5 has the lowest gravity AUDC (0.546) and noise AUDC (0.104), while 3Q at τ=0.7 has the lowest friction AUDC (0.687). Higher τ (0.8, 0.9) consistently degrades robustness across all shifts. The trade-off: τ=0.5 gives up ~13% baseline return (1483 vs 1712) but gains ~8% gravity robustness and ~29% noise robustness compared to the default τ=0.7.
 
 **HalfCheetah — AUDC by τ:**
 
