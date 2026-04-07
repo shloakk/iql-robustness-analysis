@@ -415,36 +415,39 @@ run_evaluation() {
 # ─────────────────────────────────────────────────────────────────────
 run_ablation() {
     echo ""
-    echo ">>> Phase 3: Expectile tau Ablation"
+    echo ">>> Phase 3: Expectile tau Ablation (2Q + 3Q)"
     echo "    Tau values: $TAU_VALUES"
+    echo "    Critic configs: 2 3"
     echo ""
 
     # Ablation results go to results/ (tau value is in the filename)
     for env in $ENVIRONMENTS; do
         for tau in $TAU_VALUES; do
-            for seed in $SEEDS; do
-                SAVE_DIR="tmp/abl_tau${tau}_${env}_s${seed}"
-                echo "--- Ablation: ${env} | tau=${tau} | seed=${seed} ---"
+            for nq in $CRITIC_CONFIGS; do
+                for seed in $SEEDS; do
+                    SAVE_DIR="tmp/abl_tau${tau}_${nq}Q_${env}_s${seed}"
+                    echo "--- Ablation: ${env} | tau=${tau} | ${nq}Q | seed=${seed} ---"
 
-                python scripts/train_offline.py \
-                    --env_name="${env}" \
-                    --config=configs/mujoco_config.py \
-                    --config.expectile="${tau}" \
-                    --num_critics=2 \
-                    --max_steps="${MAX_STEPS}" \
-                    --seed="${seed}" \
-                    --save_dir="${SAVE_DIR}"
+                    python scripts/train_offline.py \
+                        --env_name="${env}" \
+                        --config=configs/mujoco_config.py \
+                        --config.expectile="${tau}" \
+                        --num_critics="${nq}" \
+                        --max_steps="${MAX_STEPS}" \
+                        --seed="${seed}" \
+                        --save_dir="${SAVE_DIR}"
 
-                python scripts/evaluate_shift.py \
-                    --env_name="${env}" \
-                    --config=configs/mujoco_config.py \
-                    --config.expectile="${tau}" \
-                    --num_critics=2 \
-                    --shift_type=all \
-                    --max_steps="${MAX_STEPS}" \
-                    --seed="${seed}" \
-                    --save_dir="${SAVE_DIR}" \
-                    --output_dir=results/
+                    python scripts/evaluate_shift.py \
+                        --env_name="${env}" \
+                        --config=configs/mujoco_config.py \
+                        --config.expectile="${tau}" \
+                        --num_critics="${nq}" \
+                        --shift_type=all \
+                        --max_steps="${MAX_STEPS}" \
+                        --seed="${seed}" \
+                        --save_dir="${SAVE_DIR}" \
+                        --output_dir=results/
+                done
             done
         done
     done
