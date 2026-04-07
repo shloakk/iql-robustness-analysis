@@ -96,12 +96,14 @@ Standard IQL with expectile regression for value learning, TD updates for Q-lear
 ### Distribution Shift
 Perturbations are applied **at evaluation time only** — the policy is never retrained. This isolates the sensitivity of offline-trained policies to changes in environment dynamics.
 
-| Shift Type | MuJoCo Parameter | Levels |
-|---|---|---|
-| Gravity | `model.opt.gravity` | 0.5x, 1.0x, 1.5x, 2.0x |
-| Observation Noise | Gaussian σ | 0.0, 0.01, 0.1, 0.3 |
-| Friction | `model.geom_friction` | 0.5x, 1.0x, 1.5x, 2.0x |
-| Reward Perturbation | Gaussian σ | 0.0, 0.1, 0.5, 1.0 |
+| Shift Type | MuJoCo Parameter | Levels | What It Tests |
+|---|---|---|---|
+| Gravity | `model.opt.gravity` | 0.5x, 1.0x, 1.5x, 2.0x | Robustness to physics/dynamics changes |
+| Observation Noise | Gaussian σ | 0.0, 0.01, 0.1, 0.3 | Robustness to sensor noise (perception) |
+| Friction | `model.geom_friction` | 0.5x, 1.0x, 1.5x, 2.0x | Robustness to contact dynamics changes |
+| Reward Perturbation | Gaussian σ | 0.0, 0.1, 0.5, 1.0 | **Control experiment** — verifies the policy is truly offline (no test-time adaptation) |
+
+> **Note on Reward Perturbation:** Since IQL is an offline algorithm, the policy is frozen after training and never updates from rewards during evaluation. Reward perturbation therefore has near-zero impact on agent behavior (AUDC < 0.003 across all configs). This serves as a sanity check: if reward perturbation showed large degradation, it would indicate the agent is incorrectly adapting at test time.
 
 ### Q-Ensemble Extension
 We extend IQL's `DoubleCritic` (2 Q-networks, `min(q1,q2)`) to a `TripleCritic` (3 Q-networks, `min(q1,q2,q3)`). The hypothesis: taking the minimum over more Q-networks produces more conservative value estimates, which should degrade less under distribution shift.
@@ -187,6 +189,8 @@ We ablated the expectile hyperparameter τ ∈ {0.5, 0.7, 0.8, 0.9} for both 2Q 
 | 0.9 | 2Q | 1603 | 0.668 | 0.151 | 0.714 | 0.001 |
 | 0.9 | 3Q | 1688 | 0.739 | 0.156 | 0.734 | **0.001** |
 
+> **Hopper summary:** 2Q at τ=0.5 is the most robust configuration overall (lowest gravity and noise AUDC), but 3Q at τ=0.7 achieves the best friction robustness. Higher τ consistently degrades robustness — τ=0.8 and τ=0.9 show the worst AUDC across all shifts. The trade-off is clear: τ=0.5 sacrifices ~15% baseline return for ~30% better robustness.
+
 **HalfCheetah — AUDC by τ:**
 
 | τ | Config | Baseline | Gravity | Obs Noise | Friction | Reward Perturb |
@@ -200,6 +204,8 @@ We ablated the expectile hyperparameter τ ∈ {0.5, 0.7, 0.8, 0.9} for both 2Q 
 | 0.9 | 2Q | 5512 | 0.296 | 0.143 | 0.037 | 0.001 |
 | 0.9 | 3Q | 5586 | 0.276 | 0.131 | 0.019 | 0.001 |
 
+> **HalfCheetah summary:** This environment is the most robust overall — friction and reward perturbation AUDC are near zero across all configs. The main vulnerability is gravity shift (AUDC 0.25–0.31). The τ effect is weaker here: baselines are stable across τ values (~5400–5590), and robustness differences are small. 3Q at τ=0.7 achieves the best friction AUDC (0.011), while 2Q at τ=0.7 has the best gravity AUDC (0.245).
+
 **Walker2d — AUDC by τ:**
 
 | τ | Config | Baseline | Gravity | Obs Noise | Friction | Reward Perturb |
@@ -212,6 +218,8 @@ We ablated the expectile hyperparameter τ ∈ {0.5, 0.7, 0.8, 0.9} for both 2Q 
 | 0.8 | 3Q | 3459 | 0.727 | 0.100 | 0.179 | 0.002 |
 | 0.9 | 2Q | 3561 | 0.729 | 0.138 | 0.200 | 0.001 |
 | 0.9 | 3Q | 3281 | 0.740 | 0.120 | 0.204 | 0.002 |
+
+> **Walker2d summary:** Gravity is devastating across all configs (AUDC 0.69–0.79). The standout result is **3Q at τ=0.5** which achieves friction AUDC of 0.074 — the lowest across all environments and configs — while maintaining a competitive baseline of 3499. However, 2Q at τ=0.7 remains the best for gravity robustness (0.693). Observation noise robustness is best at τ=0.8 for both 2Q (0.103) and 3Q (0.100).
 
 ### Key Findings
 
