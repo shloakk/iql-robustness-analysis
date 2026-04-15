@@ -73,8 +73,8 @@ The core research question: *How robust is Implicit Q-Learning under controlled 
 | Shift evaluation (2Q + 3Q × 4 shifts × 4 levels) | ✅ Complete | 6 CSVs in `results/` |
 | Expectile τ ablation (τ = 0.5, 0.8, 0.9) | ✅ Complete | 9 CSVs in `results/` |
 | Robustness metrics (AUDC, worst-case) | ✅ Complete | 3 summary CSVs |
-| Multiple seeds for error bars | Not yet run | Change `SEEDS` in `run_all_hpc.sh` |
-| Final results table and plots | Pending | `notebooks/04_analyze_results.ipynb` |
+| Multiple seeds for error bars | ✅ Complete | Updated Colab notebooks to support `SEEDS=[42, 43, 44]` |
+| Final results table and plots | ✅ Complete | `notebooks/03_analyze_results.ipynb` |
 
 ---
 
