@@ -236,6 +236,40 @@ We ablated the expectile hyperparameter τ ∈ {0.5, 0.7, 0.8, 0.9} for both 2Q 
 7. **Higher τ (0.8, 0.9) increases variance** — std values are larger, indicating less stable robustness across seeds
 8. **The optimal (critics, τ) pair is environment-dependent** — no single configuration dominates across all environments and shift types
 
+### Per-Seed Baseline Returns (τ=0.7)
+
+| Environment | Config | Seed 42 | Seed 43 | Seed 44 | Seed 45 | Mean ± Std |
+|---|---|---|---|---|---|---|
+| Hopper | 2Q | 1712 | 1655 | 1418 | 1499 | **1571 ± 136** |
+| Hopper | 3Q | 1426 | 1454 | 1514 | 1482 | **1469 ± 38** |
+| HalfCheetah | 2Q | 5510 | 5528 | 5555 | 5580 | **5543 ± 31** |
+| HalfCheetah | 3Q | 5536 | 5513 | 5500 | 5453 | **5501 ± 35** |
+| Walker2d | 2Q | 3550 | 3314 | 3186 | 3390 | **3360 ± 152** |
+| Walker2d | 3Q | 3549 | 3450 | 3301 | 3394 | **3423 ± 104** |
+
+> **Observation:** 3Q baselines are more stable than 2Q (lower std) on Hopper (38 vs 136) and Walker2d (104 vs 152). HalfCheetah is stable for both (31 vs 35).
+
+### Per-Seed Gravity AUDC (τ=0.7)
+
+| Environment | Config | Seed 42 | Seed 43 | Seed 44 | Seed 45 | Mean ± Std |
+|---|---|---|---|---|---|---|
+| Hopper | 2Q | 0.595 | 0.655 | 0.607 | 0.605 | **0.616 ± 0.027** |
+| Hopper | 3Q | 0.574 | 0.561 | 0.554 | 0.426 | **0.529 ± 0.069** |
+| HalfCheetah | 2Q | 0.245 | 0.255 | 0.236 | 0.284 | **0.255 ± 0.021** |
+| HalfCheetah | 3Q | 0.255 | 0.254 | 0.263 | 0.260 | **0.258 ± 0.004** |
+| Walker2d | 2Q | 0.693 | 0.706 | 0.749 | 0.718 | **0.716 ± 0.024** |
+| Walker2d | 3Q | 0.790 | 0.744 | 0.722 | 0.702 | **0.739 ± 0.038** |
+
+> **Observation:** Hopper 3Q seed 45 is an outlier (0.426 gravity AUDC — much better than other seeds), pulling the mean down. HalfCheetah 3Q has the tightest reproducibility (std=0.004). Walker2d 2Q is the most consistent robust config (std=0.024).
+
+### Best Configuration by Environment (from multi-seed analysis)
+
+| Environment | Best for Gravity | Best for Noise | Best for Friction | Overall Recommendation |
+|---|---|---|---|---|
+| **Hopper** | 3Q τ=0.7 (0.529) | 2Q τ=0.5 (0.113) | 3Q τ=0.7 (0.692) | **3Q at default τ** |
+| **HalfCheetah** | 2Q τ=0.7 (0.255) | 3Q τ=0.5 (0.127) | 2Q τ=0.5 (0.014) | **Either (within error bars)** |
+| **Walker2d** | 2Q τ=0.7 (0.716) | 3Q τ=0.7 (0.107) | 2Q τ=0.7 (0.109) | **2Q at default τ** |
+
 ---
 
 ## Repository Structure
