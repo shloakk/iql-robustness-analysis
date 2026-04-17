@@ -155,19 +155,19 @@ Lower baseline    Balanced               Higher baseline
 More robust       Moderate               More fragile
 ```
 
-**The trade-off:** Lower τ sacrifices baseline performance for better robustness. For example, on Hopper:
-- τ=0.5: baseline 1483, gravity AUDC 0.546
-- τ=0.7: baseline 1712 (+15%), gravity AUDC 0.596 (+9% worse)
+**The trade-off:** Lower τ sacrifices baseline performance for better robustness. For example, on Hopper (mean across 4 seeds):
+- τ=0.5: baseline 1529, gravity AUDC 0.538
+- τ=0.7: baseline 1571 (+3%), gravity AUDC 0.616 (+14% worse)
 
 ---
 
 ## The Complete Experiment Matrix
 
 ```
-3 robots × 8 configurations × 4 shifts × 4 levels = 384 evaluations
+3 robots × 8 configurations × 4 shifts × 4 levels × 4 seeds = 1,536 evaluations
 ```
 
-Each evaluation runs 10 episodes and averages the return.
+Each evaluation runs 10 episodes and averages the return. All results are reported as mean ± std across the 4 seeds.
 
 | Config | Q-Networks | τ | Description |
 |---|---|---|---|
@@ -257,7 +257,7 @@ sbatch scripts/run_all_hpc.sh analyze  # Phase 4 only
 
 4. **Lower expectile τ generally improves robustness** at the cost of baseline performance — consistent with IQL theory (more pessimistic value estimates are more conservative)
 
-5. **3Q + low τ can be highly effective** — Walker2d 3Q at τ=0.5 achieves friction AUDC of 0.074, the lowest across all environments and configurations
+5. **3Q + low τ can be highly effective** — Walker2d 3Q at τ=0.5 achieves friction AUDC of 0.125 ± 0.040, among the lowest across all environments and configurations
 
 6. **The interaction between Q-ensemble and τ is non-trivial** — 3Q doesn't uniformly help; the optimal (critics, τ) pair is environment-dependent. There is no single "best" configuration.
 
