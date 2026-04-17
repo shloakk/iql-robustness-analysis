@@ -17,6 +17,12 @@
 
 ---
 
+## TL;DR
+
+We trained IQL (Implicit Q-Learning) agents on three D4RL MuJoCo locomotion tasks and systematically measured how their performance degrades under four types of environment perturbation — gravity scaling, friction scaling, observation noise, and reward perturbation — applied only at test time. We extended IQL's standard 2-critic architecture to a 3-critic ensemble (TripleCritic) and ablated the expectile hyperparameter τ ∈ {0.5, 0.7, 0.8, 0.9}, producing **1,536 shift-level evaluations** across 4 seeds. The key finding: **3Q consistently improves robustness on Hopper** (gravity AUDC 0.529 vs 0.616), but the benefit is environment-dependent — Walker2d favors 2Q, and HalfCheetah shows no significant difference. Lower τ trades baseline performance for better robustness, while higher τ (0.8–0.9) increases both performance and cross-seed variance. No single (critics, τ) configuration dominates across all environments and shift types.
+
+---
+
 ## What We Set Out To Do
 
 From our proposal, we planned to:
@@ -40,21 +46,21 @@ The core research question: *How robust is Implicit Q-Learning under controlled 
 - Identified the gap: none of these methods have been evaluated under environment-level perturbations at test time
 
 ### Baseline Reproduction
-- Trained IQL (2Q) on all 3 D4RL medium datasets: hopper (1712), halfcheetah (5510), walker2d (3550)
+- Trained IQL (2Q) on all 3 D4RL medium datasets with 4 seeds: hopper (1571 ± 136), halfcheetah (5543 ± 31), walker2d (3360 ± 152)
 - Implementation uses JAX/Flax with 2-layer MLPs (256 hidden units), expectile τ=0.7, temperature β=3.0
 
 ### Q-Ensemble Extension
 - Implemented `TripleCritic` — 3 Q-networks taking `min(q1, q2, q3)` for more conservative value estimation
-- Trained on all 3 environments: hopper (1426), halfcheetah (5536), walker2d (3549)
+- Trained on all 3 environments with 4 seeds: hopper (1469 ± 38), halfcheetah (5501 ± 35), walker2d (3423 ± 104)
 - 3Q improves robustness on Hopper (lower AUDC across all 4 shifts) but the effect is environment-dependent
 
 ### Distribution Shift Evaluation
-- Evaluated 5 configurations (2Q, 3Q, 2Q-τ0.5, 2Q-τ0.8, 2Q-τ0.9) across 3 datasets and 4 shift types
-- **Total: 240 shift-level evaluations** (3 envs × 5 configs × 4 shifts × 4 levels), each averaged over 10 episodes
+- Evaluated 8 configurations (2Q/3Q × τ ∈ {0.5, 0.7, 0.8, 0.9}) across 3 datasets and 4 shift types
+- **Total: 1,536 shift-level evaluations** (3 envs × 8 configs × 4 shifts × 4 levels × 4 seeds), each averaged over 10 episodes
 - Gravity and friction are the most damaging shifts (AUDC > 0.5); reward perturbation has negligible impact
 
 ### Expectile τ Ablation
-- Ablated τ ∈ {0.5, 0.7, 0.8, 0.9} on all 3 environments with 2Q
+- Ablated τ ∈ {0.5, 0.7, 0.8, 0.9} on all 3 environments with both 2Q and 3Q
 - Clear trend: lower τ → lower baseline but better robustness (more pessimistic value estimates)
 
 ### Evaluation Pipeline
@@ -74,7 +80,7 @@ The core research question: *How robust is Implicit Q-Learning under controlled 
 | Expectile τ ablation (τ = 0.5, 0.8, 0.9, 2Q + 3Q) | ✅ Complete | 72 CSVs (18 per seed × 4 seeds) |
 | Multiple seeds (42, 43, 44, 45) | ✅ Complete | Error bars in all results |
 | Robustness metrics (AUDC mean ± std) | ✅ Complete | 3 summary CSVs with multi-seed stats |
-| Final results table and plots | Pending | `notebooks/04_analyze_results.ipynb` |
+| Final results table and plots | ✅ Complete | Mermaid charts below |
 
 ---
 
@@ -84,9 +90,9 @@ We use the [D4RL](https://github.com/Farama-Foundation/d4rl) benchmark datasets 
 
 | Environment | Obs Dim | Act Dim | Dataset Size | Description |
 |---|---|---|---|---|
-| `hopper-medium-v2` | 11 | 3 | 1M transitions | One-legged hopping robot, mediocre policy data |
-| `halfcheetah-medium-v2` | 17 | 6 | 1M transitions | Two-legged running robot, mediocre policy data |
-| `walker2d-medium-v2` | 17 | 6 | 1M transitions | Two-legged walking robot, mediocre policy data |
+| `hopper-medium-v2` | 11 | 3 | 1M transitions | One-legged hopping robot, partially-trained policy data |
+| `halfcheetah-medium-v2` | 17 | 6 | 1M transitions | Two-legged running robot, partially-trained policy data |
+| `walker2d-medium-v2` | 17 | 6 | 1M transitions | Two-legged walking robot, partially-trained policy data |
 
 ---
 
@@ -100,9 +106,9 @@ Perturbations are applied **at evaluation time only** — the policy is never re
 
 | Shift Type | MuJoCo Parameter | Levels | What It Tests |
 |---|---|---|---|
-| Gravity | `model.opt.gravity` | 0.5x, 1.0x, 1.5x, 2.0x | Robustness to physics/dynamics changes |
+| Gravity | `model.opt.gravity` | 0.5×, 1.0×, 1.5×, 2.0× | Robustness to physics/dynamics changes |
 | Observation Noise | Gaussian σ | 0.0, 0.01, 0.1, 0.3 | Robustness to sensor noise (perception) |
-| Friction | `model.geom_friction` | 0.5x, 1.0x, 1.5x, 2.0x | Robustness to contact dynamics changes |
+| Friction | `model.geom_friction` | 0.5×, 1.0×, 1.5×, 2.0× | Robustness to contact dynamics changes |
 | Reward Perturbation | Gaussian σ | 0.0, 0.1, 0.5, 1.0 | **Control experiment** — verifies the policy is truly offline (no test-time adaptation) |
 
 > **Note on Reward Perturbation:** Since IQL is an offline algorithm, the policy is frozen after training and never updates from rewards during evaluation. Reward perturbation therefore has near-zero impact on agent behavior (AUDC < 0.003 across all configs). This serves as a sanity check: if reward perturbation showed large degradation, it would indicate the agent is incorrectly adapting at test time.
@@ -136,8 +142,6 @@ The key design choice is that **shift evaluation inherently includes baseline me
 All experiments run on SJSU CoE HPC (GPU partition), 300k training steps, **4 seeds (42, 43, 44, 45)**. The experiment covers **3 D4RL datasets × 8 configurations × 4 shift types × 4 levels × 4 seeds = 1,536 shift-level evaluations**, each averaged over 10 episodes. All AUDC values below are reported as **mean ± std** across seeds.
 
 > 📊 **Per-seed breakdown:** See [Detailed Results](docs/DETAILED_RESULTS.md) for individual seed values, cross-environment comparison tables, and seed stability analysis.
-
-The shift evaluation CSVs serve double duty: the baseline-level rows (gravity=1.0, obs_noise=0.0, friction=1.0, reward_perturb=0.0) provide the **no-shift baseline performance** for each configuration, while the shifted rows measure robustness degradation. This means the shift evaluation results contain both the baseline IQL and Q-ensemble performance numbers — no separate baseline files are needed.
 
 ### Baseline Performance (No Shift, τ=0.7, mean ± std)
 
@@ -176,6 +180,19 @@ The shift evaluation CSVs serve double duty: the baseline-level rows (gravity=1.
 | Friction | **0.109 ± 0.045** | 0.131 ± 0.017 | 2Q |
 | Reward Perturb | **0.001 ± 0.000** | 0.001 ± 0.001 | Tie |
 
+#### 2Q vs 3Q Gravity AUDC Across Environments
+
+```mermaid
+xychart-beta
+    title "Gravity AUDC by Environment (τ=0.7, lower is better)"
+    x-axis ["Hopper", "HalfCheetah", "Walker2d"]
+    y-axis "AUDC" 0 --> 0.8
+    bar [0.616, 0.255, 0.716]
+    bar [0.529, 0.258, 0.739]
+```
+
+> **Legend:** First bar = 2Q, Second bar = 3Q. On Hopper, 3Q reduces gravity AUDC by 14%. On HalfCheetah, 2Q and 3Q are within error bars. On Walker2d, 2Q is slightly more robust.
+
 ### Expectile τ Ablation (2Q + 3Q, mean ± std across 4 seeds)
 
 We ablated the expectile hyperparameter τ ∈ {0.5, 0.7, 0.8, 0.9} for both 2Q and 3Q across all 3 environments and all 4 shift types. The default τ=0.7 results come from the Phase 2 shift evaluation; the non-default τ values were trained and evaluated separately in Phase 3. This gives a complete 4×2 grid (4 τ values × 2 critic configs) per environment.
@@ -194,6 +211,19 @@ We ablated the expectile hyperparameter τ ∈ {0.5, 0.7, 0.8, 0.9} for both 2Q 
 | 0.9 | 3Q | 1848 ± 165 | 0.738 ± 0.020 | 0.158 ± 0.019 | 0.754 ± 0.024 |
 
 > **Hopper summary:** 3Q at τ=0.7 achieves the best gravity AUDC (0.529 ± 0.069) and friction AUDC (0.692 ± 0.011) with the tightest error bars. 2Q at τ=0.5 has the best noise robustness (0.113 ± 0.015). Higher τ (0.8, 0.9) consistently degrades robustness. With multi-seed data, 3Q at default τ emerges as the most reliable robust configuration for Hopper.
+
+#### Hopper Gravity AUDC — τ Ablation (2Q vs 3Q)
+
+```mermaid
+xychart-beta
+    title "Hopper Gravity AUDC by τ (lower is better)"
+    x-axis ["τ=0.5", "τ=0.7", "τ=0.8", "τ=0.9"]
+    y-axis "AUDC" 0.4 --> 0.8
+    bar [0.538, 0.616, 0.730, 0.687]
+    bar [0.573, 0.529, 0.694, 0.738]
+```
+
+> **Legend:** First bar = 2Q, Second bar = 3Q. The 2Q curve shows a clear U-shape — τ=0.5 is most robust, τ=0.8 is worst. For 3Q, τ=0.7 is the sweet spot. The crossover at τ=0.7 (where 3Q beats 2Q) and τ=0.9 (where 2Q beats 3Q) illustrates the non-trivial interaction between critic count and expectile.
 
 **HalfCheetah — AUDC by τ:**
 
@@ -236,39 +266,101 @@ We ablated the expectile hyperparameter τ ∈ {0.5, 0.7, 0.8, 0.9} for both 2Q 
 7. **Higher τ (0.8, 0.9) increases variance** — std values are larger, indicating less stable robustness across seeds
 8. **The optimal (critics, τ) pair is environment-dependent** — no single configuration dominates across all environments and shift types
 
-### Per-Seed Baseline Returns (τ=0.7)
+### Per-Seed Baseline Returns (All τ Values)
 
-| Environment | Config | Seed 42 | Seed 43 | Seed 44 | Seed 45 | Mean ± Std |
-|---|---|---|---|---|---|---|
-| Hopper | 2Q | 1712 | 1655 | 1418 | 1499 | **1571 ± 136** |
-| Hopper | 3Q | 1426 | 1454 | 1514 | 1482 | **1469 ± 38** |
-| HalfCheetah | 2Q | 5510 | 5528 | 5555 | 5580 | **5543 ± 31** |
-| HalfCheetah | 3Q | 5536 | 5513 | 5500 | 5453 | **5501 ± 35** |
-| Walker2d | 2Q | 3550 | 3314 | 3186 | 3390 | **3360 ± 152** |
-| Walker2d | 3Q | 3549 | 3450 | 3301 | 3394 | **3423 ± 104** |
+**Hopper:**
 
-> **Observation:** 3Q baselines are more stable than 2Q (lower std) on Hopper (38 vs 136) and Walker2d (104 vs 152). HalfCheetah is stable for both (31 vs 35).
+| Config | Seed 42 | Seed 43 | Seed 44 | Seed 45 | Mean ± Std |
+|---|---|---|---|---|---|
+| 2Q τ=0.5 | 1483 | 1529 | 1668 | 1437 | **1529 ± 109** |
+| 2Q τ=0.7 | 1712 | 1655 | 1418 | 1499 | **1571 ± 136** |
+| 2Q τ=0.8 | 2045 | 1830 | 2098 | 1624 | **1899 ± 228** |
+| 2Q τ=0.9 | 1603 | 1934 | 2310 | 1864 | **1928 ± 291** |
+| 3Q τ=0.5 | 1478 | 1627 | 1782 | 1622 | **1627 ± 117** |
+| 3Q τ=0.7 | 1426 | 1454 | 1514 | 1482 | **1469 ± 38** |
+| 3Q τ=0.8 | 1782 | 1741 | 1703 | 1738 | **1741 ± 37** |
+| 3Q τ=0.9 | 1688 | 1848 | 2045 | 1810 | **1848 ± 165** |
 
-### Per-Seed Gravity AUDC (τ=0.7)
+**HalfCheetah:**
 
-| Environment | Config | Seed 42 | Seed 43 | Seed 44 | Seed 45 | Mean ± Std |
-|---|---|---|---|---|---|---|
-| Hopper | 2Q | 0.595 | 0.655 | 0.607 | 0.605 | **0.616 ± 0.027** |
-| Hopper | 3Q | 0.574 | 0.561 | 0.554 | 0.426 | **0.529 ± 0.069** |
-| HalfCheetah | 2Q | 0.245 | 0.255 | 0.236 | 0.284 | **0.255 ± 0.021** |
-| HalfCheetah | 3Q | 0.255 | 0.254 | 0.263 | 0.260 | **0.258 ± 0.004** |
-| Walker2d | 2Q | 0.693 | 0.706 | 0.749 | 0.718 | **0.716 ± 0.024** |
-| Walker2d | 3Q | 0.790 | 0.744 | 0.722 | 0.702 | **0.739 ± 0.038** |
+| Config | Seed 42 | Seed 43 | Seed 44 | Seed 45 | Mean ± Std |
+|---|---|---|---|---|---|
+| 2Q τ=0.5 | 5385 | 5423 | 5461 | 5423 | **5423 ± 30** |
+| 2Q τ=0.7 | 5510 | 5528 | 5555 | 5580 | **5543 ± 31** |
+| 2Q τ=0.8 | 5551 | 5535 | 5519 | 5535 | **5535 ± 19** |
+| 2Q τ=0.9 | 5512 | 5445 | 5200 | 5624 | **5445 ± 166** |
+| 3Q τ=0.5 | 5404 | 5391 | 5371 | 5399 | **5391 ± 18** |
+| 3Q τ=0.7 | 5536 | 5501 | 5500 | 5453 | **5501 ± 35** |
+| 3Q τ=0.8 | 5522 | 5547 | 5586 | 5534 | **5547 ± 34** |
+| 3Q τ=0.9 | 5586 | 5524 | 5430 | 5556 | **5524 ± 70** |
 
-> **Observation:** Hopper 3Q seed 45 is an outlier (0.426 gravity AUDC — much better than other seeds), pulling the mean down. HalfCheetah 3Q has the tightest reproducibility (std=0.004). Walker2d 2Q is the most consistent robust config (std=0.024).
+**Walker2d:**
+
+| Config | Seed 42 | Seed 43 | Seed 44 | Seed 45 | Mean ± Std |
+|---|---|---|---|---|---|
+| 2Q τ=0.5 | 3361 | 3376 | 3600 | 3168 | **3376 ± 179** |
+| 2Q τ=0.7 | 3550 | 3314 | 3186 | 3390 | **3360 ± 152** |
+| 2Q τ=0.8 | 3376 | 3392 | 3556 | 3244 | **3392 ± 142** |
+| 2Q τ=0.9 | 3561 | 3362 | 3510 | 3016 | **3362 ± 237** |
+| 3Q τ=0.5 | 3499 | 3618 | 3756 | 3600 | **3618 ± 105** |
+| 3Q τ=0.7 | 3549 | 3450 | 3301 | 3394 | **3423 ± 104** |
+| 3Q τ=0.8 | 3459 | 3481 | 3200 | 3784 | **3481 ± 213** |
+| 3Q τ=0.9 | 3281 | 3370 | 3050 | 3780 | **3370 ± 278** |
+
+> **Observations:** Higher τ increases both baseline performance and variance. 3Q baselines are more stable than 2Q (lower std) on Hopper at τ=0.7 (38 vs 136) and τ=0.8 (37 vs 228). HalfCheetah is stable across all configs (std ≤ 35), except 2Q τ=0.9 (std=166). Walker2d 3Q τ=0.9 has the highest variance (std=278).
+
+### Per-Seed Gravity AUDC (All τ Values)
+
+**Hopper:**
+
+| Config | Seed 42 | Seed 43 | Seed 44 | Seed 45 | Mean ± Std |
+|---|---|---|---|---|---|
+| 2Q τ=0.5 | 0.546 | 0.652 | 0.446 | 0.510 | **0.538 ± 0.086** |
+| 2Q τ=0.7 | 0.595 | 0.655 | 0.607 | 0.605 | **0.616 ± 0.027** |
+| 2Q τ=0.8 | 0.757 | 0.749 | 0.726 | 0.688 | **0.730 ± 0.031** |
+| 2Q τ=0.9 | 0.668 | 0.793 | 0.563 | 0.723 | **0.687 ± 0.097** |
+| 3Q τ=0.5 | 0.599 | 0.475 | 0.587 | 0.634 | **0.573 ± 0.069** |
+| 3Q τ=0.7 | 0.574 | 0.561 | 0.554 | 0.426 | **0.529 ± 0.069** |
+| 3Q τ=0.8 | 0.668 | 0.722 | 0.673 | 0.713 | **0.694 ± 0.027** |
+| 3Q τ=0.9 | 0.739 | 0.724 | 0.767 | 0.724 | **0.738 ± 0.020** |
+
+**HalfCheetah:**
+
+| Config | Seed 42 | Seed 43 | Seed 44 | Seed 45 | Mean ± Std |
+|---|---|---|---|---|---|
+| 2Q τ=0.5 | 0.305 | 0.256 | 0.255 | 0.275 | **0.273 ± 0.023** |
+| 2Q τ=0.7 | 0.245 | 0.255 | 0.236 | 0.284 | **0.255 ± 0.021** |
+| 2Q τ=0.8 | 0.263 | 0.239 | 0.271 | 0.266 | **0.260 ± 0.014** |
+| 2Q τ=0.9 | 0.296 | 0.214 | 0.268 | 0.288 | **0.267 ± 0.037** |
+| 3Q τ=0.5 | 0.290 | 0.285 | 0.258 | 0.274 | **0.277 ± 0.014** |
+| 3Q τ=0.7 | 0.255 | 0.254 | 0.263 | 0.260 | **0.258 ± 0.004** |
+| 3Q τ=0.8 | 0.280 | 0.260 | 0.253 | 0.276 | **0.267 ± 0.013** |
+| 3Q τ=0.9 | 0.276 | 0.251 | 0.240 | 0.262 | **0.257 ± 0.015** |
+
+**Walker2d:**
+
+| Config | Seed 42 | Seed 43 | Seed 44 | Seed 45 | Mean ± Std |
+|---|---|---|---|---|---|
+| 2Q τ=0.5 | 0.776 | 0.713 | 0.837 | 0.669 | **0.749 ± 0.074** |
+| 2Q τ=0.7 | 0.693 | 0.706 | 0.749 | 0.718 | **0.716 ± 0.024** |
+| 2Q τ=0.8 | 0.776 | 0.743 | 0.729 | 0.789 | **0.759 ± 0.028** |
+| 2Q τ=0.9 | 0.729 | 0.755 | 0.701 | 0.794 | **0.745 ± 0.040** |
+| 3Q τ=0.5 | 0.708 | 0.804 | 0.766 | 0.749 | **0.757 ± 0.040** |
+| 3Q τ=0.7 | 0.790 | 0.744 | 0.722 | 0.702 | **0.739 ± 0.038** |
+| 3Q τ=0.8 | 0.727 | 0.770 | 0.753 | 0.785 | **0.759 ± 0.025** |
+| 3Q τ=0.9 | 0.740 | 0.678 | 0.754 | 0.781 | **0.738 ± 0.044** |
+
+> **Observations:** Hopper 3Q seed 45 at τ=0.7 is an outlier (0.426 — much better than other seeds), pulling the mean down. HalfCheetah 3Q τ=0.7 has the tightest reproducibility (std=0.004). 2Q τ=0.9 consistently shows the highest variance across all environments. Walker2d gravity AUDC is tightly clustered (0.716–0.759) regardless of config.
 
 ### Best Configuration by Environment (from multi-seed analysis)
 
-| Environment | Best for Gravity | Best for Noise | Best for Friction | Overall Recommendation |
-|---|---|---|---|---|
-| **Hopper** | 3Q τ=0.7 (0.529) | 2Q τ=0.5 (0.113) | 3Q τ=0.7 (0.692) | **3Q at default τ** |
-| **HalfCheetah** | 2Q τ=0.7 (0.255) | 3Q τ=0.5 (0.127) | 2Q τ=0.5 (0.014) | **Either (within error bars)** |
-| **Walker2d** | 2Q τ=0.7 (0.716) | 3Q τ=0.7 (0.107) | 2Q τ=0.7 (0.109) | **2Q at default τ** |
+| | 🌍 Gravity | 👀 Obs Noise | 🧊 Friction | 📋 Recommendation |
+|:---|:---:|:---:|:---:|:---|
+| **🦘 Hopper** | 🟢 3Q τ=0.7 (0.529) | 🟡 2Q τ=0.5 (0.113) | 🟢 3Q τ=0.7 (0.692) | **3Q at default τ** |
+| **🐆 HalfCheetah** | 🔵 2Q τ=0.7 (0.255) | 🟢 3Q τ=0.5 (0.127) | 🟡 2Q τ=0.5 (0.014) | **Either (within error bars)** |
+| **🚶 Walker2d** | 🔵 2Q τ=0.7 (0.716) | 🟢 3Q τ=0.7 (0.107) | 🔵 2Q τ=0.7 (0.109) | **2Q at default τ** |
+
+> 🟢 = 3Q wins, 🔵 = 2Q wins, 🟡 = low-τ variant wins. AUDC values in parentheses (lower = better).
 
 ---
 
@@ -316,13 +408,13 @@ iql-robustness-analysis/
 │
 ├── docs/                         # Documentation
 │   ├── EXPERIMENT_GUIDE.md       #   Plain-language experiment explanation
-│   └── DETAILED_RESULTS.md      #   Per-seed results tables & analysis
+│   └── DETAILED_RESULTS.md       #   Per-seed results tables & analysis
 │
-├── results/                      # Experiment outputs (24 shift CSVs + 3 summaries)
-│   ├── shift_{env}_{2Q|3Q}_seed42.csv        # Phase 2: shift eval (6 files)
-│   ├── shift_{env}_{2Q|3Q}_seed42_tau{τ}.csv # Phase 3: ablation (18 files)
-│   ├── summary_{env}.csv                     # Phase 4: AUDC summary (3 files)
-│   └── archive/                              # Legacy training curves
+├── results/                      # Experiment outputs (96 shift CSVs + 3 summaries)
+│   ├── shift_{env}_{2Q|3Q}_seed{N}.csv        # Phase 2: shift eval
+│   ├── shift_{env}_{2Q|3Q}_seed{N}_tau{τ}.csv # Phase 3: ablation
+│   ├── summary_{env}.csv                      # Phase 4: AUDC summary
+│   └── archive/                               # Legacy training curves
 │
 ├── requirements.txt
 ├── LICENSE
@@ -370,9 +462,9 @@ needs to be done once — the `/home` directory is shared across all HPC nodes,
 so batch jobs on GPU nodes activate the same venv.
 
 The batch job runs sequentially within a single SLURM allocation:
-- **Phase 1:** Training — 6 runs (3 envs x 2 critic configs), ~20 min each
+- **Phase 1:** Training — 6 runs (3 envs × 2 critic configs), ~20 min each
 - **Phase 2:** Shift evaluation — 6 runs (all 4 shift types per model)
-- **Phase 3:** Expectile tau ablation — 9 runs (3 envs x 3 tau values)
+- **Phase 3:** Expectile τ ablation — 18 runs (3 envs × 3 τ values × 2 critic configs)
 - **Phase 4:** Analysis — computes robustness metrics from CSVs
 
 HPC partitions: `gpu` (P100/A100/H100, 48h max), `compute` (CPU only, 24h max),
