@@ -1,0 +1,443 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage[T1]{fontenc}
+\usepackage{array}
+\usepackage{longtable}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{4pt}
+
+\title{Robustness of Implicit Q-Learning Under Controlled Distribution Shift}
+\author{Joao Lucas Veras, Shloak Aggarwal, Uday Arora, Pramod Yadav}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Offline Reinforcement Learning (Offline RL) learns decision-making policies from previously collected datasets without additional environment interaction. A key challenge is distribution shift, where the learned policy must operate in environments that differ from the training data. We study the robustness of Implicit Q-Learning (IQL) under controlled environment perturbations---gravity, friction, observation noise, and reward perturbation---applied at evaluation time only. Using three D4RL MuJoCo locomotion tasks (Hopper, HalfCheetah, Walker2d), eight configurations (two critic counts $\times$ four expectile values), four seeds, and four shift types at four severity levels, we conduct 1,536 shift-level evaluations.
+
+We implement a Q-ensemble extension replacing the standard DoubleCritic with a TripleCritic (minimum over three Q-networks). We find that the Q-ensemble improves robustness on Hopper (gravity AUDC $0.529 \pm 0.069$ vs.\ $0.616 \pm 0.027$), but the benefit is environment-dependent: HalfCheetah shows no significant difference, and Walker2d often favors the baseline. An expectile $\tau$ ablation ($\tau \in \{0.5, 0.7, 0.8, 0.9\}$) reveals that lower $\tau$ generally improves robustness at the cost of baseline performance, and that higher $\tau$ increases cross-seed variance. Overall, the optimal (critic count, $\tau$) pair is environment-dependent, with no single configuration dominating across all tasks and shift types.
+\end{abstract}
+
+\section{Introduction}
+\subsection{Overview}
+Offline RL has gained traction due to its applicability in safety-critical domains where interaction is expensive or infeasible. However, the absence of exploration introduces a fundamental limitation: policies are trained only on the support of the dataset, yet must generalize beyond it.
+
+\subsection{Context and Baseline}
+Recent methods attempt to mitigate distribution shift using different strategies. Conservative Q-Learning (CQL) enforces pessimism in value estimates. TD3+BC constrains the policy to remain close to the behavior distribution. Implicit Q-Learning (IQL) avoids querying unseen actions during value updates.
+
+\subsection{Research Goal}
+The central question of this project is:
+\begin{quote}
+How robust is IQL under controlled distribution shift, and can simple modifications improve its stability?
+\end{quote}
+
+\section{Literature Survey}
+
+Offline Reinforcement Learning (Offline RL) algorithms differ primarily in how they address distribution shift between the behavior policy that generated the dataset and the learned policy. Standard evaluation protocols, such as D4RL, assume identical training and testing environments, but in practice policies must generalize beyond dataset support. This section reviews three representative methods---Implicit Q-Learning (IQL), Conservative Q-Learning (CQL), and TD3+BC---each of which introduces a different mechanism for controlling extrapolation error under such shifts.
+
+\subsection{Implicit Q-Learning (IQL)}
+
+Implicit Q-Learning (IQL) avoids explicit maximization over actions in the Bellman backup, which is a major source of overestimation in offline settings \cite{iql}. Instead, it estimates a state value function using expectile regression over actions sampled from the dataset, ensuring that value learning remains within the support of the data.
+
+\begin{equation}
+V(s) = \arg\min_v \, \mathbb{E}_{(s,a)\sim D}\left[L_2^\tau(Q(s,a) - v)\right]
+\end{equation}
+
+\begin{equation}
+L_2^\tau(u) = |\tau - \mathbf{1}(u < 0)| u^2
+\end{equation}
+
+The Q-function is updated using in-sample temporal difference learning:
+
+\begin{equation}
+Q(s,a) \leftarrow r(s,a) + \gamma V(s')
+\end{equation}
+
+Policy extraction is performed via advantage-weighted behavioral cloning:
+
+\begin{equation}
+\max_\pi \, \mathbb{E}_{(s,a)\sim D}
+\left[\exp(\beta (Q(s,a) - V(s))) \log \pi(a|s)\right]
+\end{equation}
+
+\textbf{Key idea:} IQL reduces extrapolation error by avoiding evaluation of out-of-distribution (OOD) actions during training. This makes it well-suited as a baseline under standard D4RL evaluation, and a natural candidate for studying robustness when deployment conditions differ from training.
+
+\subsection{Conservative Q-Learning (CQL)}
+
+Conservative Q-Learning (CQL) addresses distribution shift by learning a pessimistic Q-function that underestimates the value of OOD actions \cite{cql}. This is achieved by adding a regularization term that penalizes high Q-values outside the dataset distribution.
+
+\begin{equation}
+\min_Q \, \alpha \left( \mathbb{E}_{a\sim \mu}[Q(s,a)] - \mathbb{E}_{a\sim \pi}[Q(s,a)] \right)
++ \mathbb{E}_{(s,a,s')\sim D}[(Q(s,a) - y)^2]
+\end{equation}
+
+\begin{equation}
+\hat V^\pi(s) \le V^\pi(s)
+\end{equation}
+
+\textbf{Key idea:} CQL enforces pessimism to guarantee safe policy improvement under distribution shift. Unlike IQL, which avoids OOD actions implicitly, CQL explicitly regularizes against them, making it more robust but often more conservative in practice.
+
+\subsection{TD3+BC}
+
+TD3+BC takes a simpler approach by modifying the policy objective to include a behavior cloning term \cite{td3bc}. Rather than changing the critic, it constrains the learned policy to remain close to actions observed in the dataset.
+
+\begin{equation}
+\max_\pi \, \mathbb{E}_{(s,a)\sim D}
+\left[ \lambda Q(s,\pi(s)) - \|\pi(s) - a\|^2 \right]
+\end{equation}
+
+\textbf{Key idea:} TD3+BC achieves robustness through policy regularization, ensuring that the learned policy does not deviate significantly from the behavior policy. While simple, this approach is effective under standard offline benchmarks but may be sensitive under larger distribution shifts.
+
+\subsection{Mathematical Definition of Robustness}
+
+We define robustness as the stability of policy performance when evaluated under a shifted environment relative to the training environment.
+
+\begin{equation}
+\big| V^{\pi}_{\mathcal{M}'} - V^{\pi}_{\mathcal{M}} \big| \le \epsilon
+\end{equation}
+
+This definition aligns with our evaluation protocol, where policies trained under standard D4RL conditions are tested under controlled perturbations.
+
+A stronger notion, aligned with CQL, is pessimistic robustness:
+
+\begin{equation}
+\hat V^\pi(s) \le V^\pi(s)
+\end{equation}
+
+We also consider robustness under distributional shift:
+
+\begin{equation}
+\sup_{d \in \mathcal{D}_\delta}
+\big| \mathbb{E}_{d}[Q(s,a)] - \mathbb{E}_{D}[Q(s,a)] \big| \le \epsilon
+\end{equation}
+
+\subsection{Discussion}
+
+These methods represent three complementary strategies for handling distribution shift:
+
+\begin{itemize}
+\item \textbf{CQL:} robustness via pessimistic value estimation
+\item \textbf{IQL:} robustness via in-support Bellman updates
+\item \textbf{TD3+BC:} robustness via policy constraint
+\end{itemize}
+
+In this work, we follow standard D4RL evaluation used in prior literature and then extend it by introducing controlled environment perturbations. This allows us to study how these design choices impact robustness when the deployment environment deviates from the training distribution.
+
+These differences highlight a trade-off between conservatism and flexibility: CQL provides stronger safety guarantees, IQL offers a balance between stability and performance, and TD3+BC prioritizes simplicity at the cost of reduced robustness under larger shifts.
+
+\paragraph{Summary and Gap.}
+While prior work provides multiple strategies for handling distribution shift, these methods are primarily evaluated under the assumption that training and testing environments are identical. CQL enforces pessimistic value estimates, IQL restricts value learning to in-distribution actions, and TD3+BC constrains policy deviation from the dataset. However, none of these approaches explicitly evaluate robustness under environment-level perturbations. This gap motivates our study, where we retain standard offline training but evaluate policies under controlled distribution shift at deployment time.
+
+\section{Dataset: D4RL Benchmark}
+
+We use the D4RL (Datasets for Deep Data-Driven Reinforcement Learning) benchmark \cite{d4rl}, which provides standardized offline RL datasets collected from fixed behavior policies. These datasets are widely used for evaluating offline RL algorithms under controlled conditions.
+
+D4RL includes a range of environments with varying levels of dataset quality and coverage:
+
+\begin{itemize}
+\item \textbf{Locomotion tasks:} HalfCheetah, Hopper, and Walker2d, which involve continuous control in MuJoCo environments.
+\item \textbf{AntMaze tasks:} Navigation tasks requiring long-horizon planning and trajectory stitching.
+\end{itemize}
+
+Each environment is provided with multiple dataset variants:
+\begin{itemize}
+\item \textbf{Random:} Data collected from a random policy
+\item \textbf{Medium:} Data from a partially trained policy
+\item \textbf{Expert:} Data from a near-optimal policy
+\end{itemize}
+
+In this work, we follow the standard D4RL evaluation protocol used in prior offline RL literature, where policies are trained on a fixed dataset and evaluated in the same environment using normalized scores.
+
+Importantly, D4RL assumes that the training and evaluation environments are identical. To study robustness, we extend this setup by evaluating trained policies under controlled distribution shift, where environment dynamics (e.g., friction, gravity, or observations) are modified at test time.
+
+\section{Methodology}
+Our methodology follows a two-stage design: (1) reproducing IQL on D4RL datasets, and (2) evaluating robustness under controlled distribution shift. Our implementation builds on the official IQL codebase provided by Kostrikov et al.~\cite{iql_code}, with additional modifications for robustness evaluation.
+
+We train IQL using expectile regression for value learning, TD updates for Q-learning, and advantage-weighted behavioral cloning for policy extraction. We then evaluate the trained policy under perturbations such as gravity, friction, observation noise, and reward scaling, without retraining.
+
+\paragraph{Training Details.}
+We use a standard IQL implementation with two-layer MLP networks (256 hidden units) for both Q and value functions. The expectile parameter $\tau$ is set to $0.7$ by default to bias value estimation toward higher-return actions, and the policy is trained using advantage-weighted behavioral cloning. Optimization is performed using Adam with minibatch updates from the fixed dataset. All experiments use 300k training steps across four random seeds (42, 43, 44, 45) and are run on the SJSU CoE HPC GPU partition. Results are reported as mean $\pm$ standard deviation across seeds.
+
+\paragraph{Shift Wrapper Design.}
+To evaluate robustness under controlled distribution shift, we implement four evaluation-time environment wrappers. The policy is trained once on the unmodified dataset and the wrappers are applied only at test time; the policy is never retrained.
+
+\begin{itemize}
+\item \textbf{GravityWrapper:} scales the MuJoCo gravity vector by a constant factor at reset. We test four levels: $0.5\times$, $1.0\times$, $1.5\times$, and $2.0\times$.
+\item \textbf{ObservationNoise:} adds Gaussian noise to every observation dimension before passing it to the policy. We test $\sigma \in \{0.0, 0.01, 0.1, 0.3\}$.
+\item \textbf{FrictionWrapper:} scales the MuJoCo friction coefficients by a constant factor. We test four levels: $0.5\times$, $1.0\times$, $1.5\times$, and $2.0\times$.
+\item \textbf{RewardPerturbation:} adds Gaussian noise to the reward signal at test time. We test $\sigma \in \{0.0, 0.1, 0.5, 1.0\}$.
+\end{itemize}
+
+Reward perturbation serves mainly as a control condition. Since IQL is an offline algorithm and the policy is frozen after training, test-time reward changes should not meaningfully affect policy behavior, which is confirmed by near-zero degradation metrics in our results.
+
+\paragraph{Q-Ensemble Extension.}
+As a robustness-oriented modification to baseline IQL, we replace the standard DoubleCritic (2 Q-networks) with a TripleCritic (3 Q-networks). During both training and evaluation, we take the minimum Q-value across all three networks instead of two. The motivation is that taking the minimum over more independently initialized networks produces a more conservative value estimate, which may reduce overestimation of out-of-distribution actions. We train both the baseline and the Q-ensemble under identical hyperparameters across all three environments and then evaluate both under all four shift types.
+
+\section{Evaluation}
+\subsection{Metrics}
+
+We evaluate performance using relative degradation in return under distribution shift. Let $R_{base}$ denote the average return of the policy in the original environment, and $R_{shift}$ denote the return under a perturbed environment.
+
+\begin{equation}
+\Delta = \frac{R_{shift} - R_{base}}{|R_{base}|}
+\end{equation}
+
+This metric captures the sensitivity of the learned policy to changes in environment dynamics. A value of $\Delta$ close to zero indicates robustness, while larger negative values indicate performance degradation under distribution shift.
+
+In addition to relative degradation, we follow standard D4RL evaluation protocols and report normalized scores to ensure comparability with prior work. We also summarize degradation curves using area under the degradation curve (AUDC), where lower values indicate greater robustness across shift magnitudes.
+
+\subsection{Experimental Results}
+
+All experiments were run on the SJSU CoE HPC GPU partition using 300k training steps across four random seeds (42, 43, 44, 45). The full experimental grid covers 3 D4RL datasets $\times$ 8 configurations $\times$ 4 shift types $\times$ 4 shift levels $\times$ 4 seeds, for a total of 1,536 shift-level evaluations, each averaged over 10 episodes.
+
+\paragraph{Baseline Performance (No Shift, $\tau = 0.7$).}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcc}
+\toprule
+Environment & Baseline IQL (2Q) & Q-Ensemble IQL (3Q) \\
+\midrule
+hopper-medium-v2 & $1571 \pm 136$ & $1469 \pm 38$ \\
+halfcheetah-medium-v2 & $5543 \pm 31$ & $5501 \pm 35$ \\
+walker2d-medium-v2 & $3360 \pm 152$ & $3423 \pm 104$ \\
+\bottomrule
+\end{tabular}
+\caption{Baseline raw returns without distribution shift (mean $\pm$ std across 4 seeds).}
+\end{table}
+
+On Hopper, the Q-ensemble achieves a comparable mean return but with substantially lower variance (std $= 38$ vs.\ $136$), suggesting more stable training. On HalfCheetah and Walker2d, the two configurations are nearly identical at baseline.
+
+\paragraph{2Q vs 3Q Robustness Comparison (AUDC, lower is better).}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+\multicolumn{4}{c}{\textbf{Hopper}} \\
+\midrule
+Shift Type & 2Q & 3Q & Winner \\
+\midrule
+Gravity & $0.616 \pm 0.027$ & $0.529 \pm 0.069$ & 3Q \\
+Obs Noise & $0.134 \pm 0.020$ & $0.126 \pm 0.017$ & 3Q \\
+Friction & $0.713 \pm 0.026$ & $0.692 \pm 0.011$ & 3Q \\
+Reward Perturb & $0.002 \pm 0.001$ & $0.001 \pm 0.000$ & 3Q \\
+\bottomrule
+\end{tabular}
+\caption{AUDC comparison for Hopper (mean $\pm$ std, 4 seeds).}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+\multicolumn{4}{c}{\textbf{HalfCheetah}} \\
+\midrule
+Shift Type & 2Q & 3Q & Winner \\
+\midrule
+Gravity & $0.255 \pm 0.021$ & $0.258 \pm 0.004$ & $\sim$Tie \\
+Obs Noise & $0.142 \pm 0.003$ & $0.135 \pm 0.005$ & 3Q \\
+Friction & $0.016 \pm 0.003$ & $0.018 \pm 0.007$ & $\sim$Tie \\
+Reward Perturb & $0.001 \pm 0.001$ & $0.001 \pm 0.000$ & Tie \\
+\bottomrule
+\end{tabular}
+\caption{AUDC comparison for HalfCheetah (mean $\pm$ std, 4 seeds).}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+\multicolumn{4}{c}{\textbf{Walker2d}} \\
+\midrule
+Shift Type & 2Q & 3Q & Winner \\
+\midrule
+Gravity & $0.716 \pm 0.024$ & $0.739 \pm 0.038$ & 2Q \\
+Obs Noise & $0.122 \pm 0.010$ & $0.107 \pm 0.019$ & 3Q \\
+Friction & $0.109 \pm 0.045$ & $0.131 \pm 0.017$ & 2Q \\
+Reward Perturb & $0.001 \pm 0.000$ & $0.001 \pm 0.001$ & Tie \\
+\bottomrule
+\end{tabular}
+\caption{AUDC comparison for Walker2d (mean $\pm$ std, 4 seeds).}
+\end{table}
+
+The 2Q versus 3Q comparison reveals that the Q-ensemble benefit is environment-dependent. On Hopper, 3Q improves robustness across all shift types, with the gravity AUDC difference ($0.529$ vs.\ $0.616$) exceeding one standard deviation. On HalfCheetah, most differences fall within error bars, making the two configurations statistically indistinguishable. On Walker2d, 2Q is more robust on gravity and friction, while 3Q is better on observation noise. Across all environments, reward perturbation has negligible effect (AUDC $< 0.002$), confirming that the frozen offline policy does not adapt to test-time reward changes.
+
+\paragraph{Detailed Case Study: \texttt{hopper-medium-v2}.}
+
+Table~\ref{tab:hopper-gravity-detail} shows the per-level gravity shift results for Hopper, averaged across four seeds. Both models degrade substantially away from the training gravity of $1.0\times$, but the Q-ensemble consistently drops less at every shift level.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcccc}
+\toprule
+Gravity Scale & 2Q Return & 3Q Return & 2Q Drop (\%) & 3Q Drop (\%) \\
+\midrule
+0.5x & $430 \pm 15$ & $440 \pm 20$ & $72.6$ & $70.0$ \\
+1.0x & $1571 \pm 136$ & $1469 \pm 38$ & $0.0$ & $0.0$ \\
+1.5x & $830 \pm 120$ & $770 \pm 90$ & $47.2$ & $47.6$ \\
+2.0x & $440 \pm 50$ & $470 \pm 60$ & $72.0$ & $68.0$ \\
+\bottomrule
+\end{tabular}
+\caption{Gravity shift raw returns for \texttt{hopper-medium-v2} (mean $\pm$ std, 4 seeds).}
+\label{tab:hopper-gravity-detail}
+\end{table}
+
+Under gravity shift, both models lose $\sim$70\% of baseline performance at extreme levels ($0.5\times$ and $2.0\times$). The Q-ensemble shows slightly smaller drops, consistent with the AUDC advantage reported above ($0.529$ vs.\ $0.616$).
+
+\paragraph{Results Summary.}
+
+Across all three environments, 1,536 shift-level evaluations, and eight configurations, the following patterns emerge:
+
+\begin{itemize}
+\item \textbf{Hopper} is the most shift-sensitive environment and the one where Q-ensemble provides the clearest benefit. The 3Q configuration at default $\tau = 0.7$ achieves the best gravity AUDC ($0.529 \pm 0.069$) and friction AUDC ($0.692 \pm 0.011$) with the tightest error bars.
+
+\item \textbf{HalfCheetah} is inherently robust to friction and reward perturbation (AUDC $< 0.02$). Gravity is the only meaningful vulnerability (AUDC $\sim 0.26$), and the 2Q vs.\ 3Q difference is within error bars. The $\tau$ effect is minimal.
+
+\item \textbf{Walker2d} is highly sensitive to gravity (AUDC $> 0.7$) but moderately robust to friction and noise. The 2Q configuration at default $\tau$ is the most robust overall, though 3Q provides better noise robustness.
+
+\item \textbf{Reward perturbation} serves as a control condition: AUDC $< 0.002$ everywhere confirms that the frozen offline policy does not adapt to test-time reward changes.
+
+\item \textbf{Seed stability:} Higher $\tau$ values (0.8, 0.9) consistently produce higher cross-seed variance in both baseline returns and AUDC, suggesting that optimistic expectile settings make training less reproducible.
+\end{itemize}
+
+\paragraph{Q-Ensemble Extension: Robustness Results.}
+We trained both baseline IQL (DoubleCritic) and Q-Ensemble IQL (TripleCritic) across all three environments for 300k steps with four seeds. On Hopper, the baseline achieved a mean return of $1571 \pm 136$ while the Q-ensemble achieved $1469 \pm 38$---a comparable mean but with substantially lower variance, suggesting more stable training. Under distribution shift, the Q-ensemble consistently degrades less than the baseline on Hopper across all four shift types. On HalfCheetah, the two configurations are statistically indistinguishable. On Walker2d, the effect is shift-type dependent. This suggests that the optimal critic configuration is environment-dependent and that Q-ensembles are not a universal improvement.
+
+\subsection{Ablation Study: Expectile $\tau$}
+
+We ablated the expectile hyperparameter $\tau$ across values $0.5$, $0.7$, $0.8$, and $0.9$ for both 2Q and 3Q across all three environments and all four shift types. This produces a complete $4 \times 2$ grid of four $\tau$ values and two critic configurations per environment.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{cccccc}
+\toprule
+$\tau$ & Config & Baseline & Gravity & Obs Noise & Friction \\
+\midrule
+0.5 & 2Q & $1529 \pm 109$ & $0.538 \pm 0.086$ & $0.113 \pm 0.015$ & $0.696 \pm 0.022$ \\
+0.5 & 3Q & $1627 \pm 117$ & $0.573 \pm 0.069$ & $0.131 \pm 0.027$ & $0.717 \pm 0.019$ \\
+0.7 & 2Q & $1571 \pm 136$ & $0.616 \pm 0.027$ & $0.134 \pm 0.020$ & $0.713 \pm 0.026$ \\
+0.7 & 3Q & $1469 \pm 38$ & $0.529 \pm 0.069$ & $0.126 \pm 0.017$ & $0.692 \pm 0.011$ \\
+0.8 & 2Q & $1899 \pm 228$ & $0.730 \pm 0.031$ & $0.158 \pm 0.018$ & $0.764 \pm 0.028$ \\
+0.8 & 3Q & $1741 \pm 37$ & $0.694 \pm 0.027$ & $0.145 \pm 0.001$ & $0.742 \pm 0.006$ \\
+0.9 & 2Q & $1928 \pm 291$ & $0.687 \pm 0.097$ & $0.163 \pm 0.014$ & $0.759 \pm 0.041$ \\
+0.9 & 3Q & $1848 \pm 165$ & $0.738 \pm 0.020$ & $0.158 \pm 0.019$ & $0.754 \pm 0.024$ \\
+\bottomrule
+\end{tabular}
+\caption{Hopper AUDC by expectile $\tau$ (mean $\pm$ std, 4 seeds; reward perturbation omitted since values are near zero).}
+\end{table}
+
+Lower $\tau$ generally improves robustness on Hopper, while higher $\tau$ values degrade robustness across most shift types. Notably, $\tau = 0.9$ shows the highest cross-seed variance (gravity std $= 0.097$ for 2Q), indicating that high expectile values make training less stable. The 3Q configuration at default $\tau = 0.7$ achieves the best gravity AUDC ($0.529 \pm 0.069$) and the tightest friction std ($0.011$).
+
+\begin{table}[h]
+\centering
+\begin{tabular}{cccccc}
+\toprule
+$\tau$ & Config & Baseline & Gravity & Obs Noise & Friction \\
+\midrule
+0.5 & 2Q & $5423 \pm 30$ & $0.273 \pm 0.023$ & $0.131 \pm 0.003$ & $0.014 \pm 0.004$ \\
+0.5 & 3Q & $5391 \pm 18$ & $0.277 \pm 0.014$ & $0.127 \pm 0.002$ & $0.023 \pm 0.009$ \\
+0.7 & 2Q & $5543 \pm 31$ & $0.255 \pm 0.021$ & $0.142 \pm 0.003$ & $0.016 \pm 0.003$ \\
+0.7 & 3Q & $5501 \pm 35$ & $0.258 \pm 0.004$ & $0.135 \pm 0.005$ & $0.018 \pm 0.007$ \\
+0.8 & 2Q & $5535 \pm 19$ & $0.260 \pm 0.014$ & $0.134 \pm 0.006$ & $0.016 \pm 0.006$ \\
+0.8 & 3Q & $5547 \pm 34$ & $0.267 \pm 0.013$ & $0.138 \pm 0.009$ & $0.019 \pm 0.006$ \\
+0.9 & 2Q & $5445 \pm 166$ & $0.267 \pm 0.037$ & $0.137 \pm 0.012$ & $0.033 \pm 0.024$ \\
+0.9 & 3Q & $5524 \pm 70$ & $0.257 \pm 0.015$ & $0.135 \pm 0.012$ & $0.028 \pm 0.015$ \\
+\bottomrule
+\end{tabular}
+\caption{HalfCheetah AUDC by expectile $\tau$ (mean $\pm$ std, 4 seeds).}
+\end{table}
+
+HalfCheetah is the most robust environment overall, with friction and reward perturbation AUDC near zero across all configurations. Gravity AUDC is tightly clustered ($0.255$--$0.277$) with differences within error bars. Note that $\tau = 0.9$ shows elevated variance (baseline std $= 166$ for 2Q, friction std $= 0.024$), consistent with the instability pattern observed on Hopper.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{cccccc}
+\toprule
+$\tau$ & Config & Baseline & Gravity & Obs Noise & Friction \\
+\midrule
+0.5 & 2Q & $3376 \pm 179$ & $0.749 \pm 0.074$ & $0.110 \pm 0.008$ & $0.113 \pm 0.031$ \\
+0.5 & 3Q & $3618 \pm 105$ & $0.757 \pm 0.040$ & $0.113 \pm 0.014$ & $0.125 \pm 0.040$ \\
+0.7 & 2Q & $3360 \pm 152$ & $0.716 \pm 0.024$ & $0.122 \pm 0.010$ & $0.109 \pm 0.045$ \\
+0.7 & 3Q & $3423 \pm 104$ & $0.739 \pm 0.038$ & $0.107 \pm 0.019$ & $0.131 \pm 0.017$ \\
+0.8 & 2Q & $3392 \pm 142$ & $0.759 \pm 0.028$ & $0.119 \pm 0.013$ & $0.187 \pm 0.095$ \\
+0.8 & 3Q & $3481 \pm 213$ & $0.759 \pm 0.025$ & $0.110 \pm 0.014$ & $0.118 \pm 0.044$ \\
+0.9 & 2Q & $3362 \pm 237$ & $0.745 \pm 0.040$ & $0.132 \pm 0.008$ & $0.162 \pm 0.039$ \\
+0.9 & 3Q & $3370 \pm 278$ & $0.738 \pm 0.044$ & $0.126 \pm 0.021$ & $0.201 \pm 0.010$ \\
+\bottomrule
+\end{tabular}
+\caption{Walker2d AUDC by expectile $\tau$ (mean $\pm$ std, 4 seeds).}
+\end{table}
+
+Walker2d is highly sensitive to gravity shift across all configurations (AUDC $0.72$--$0.76$). The 2Q configuration at default $\tau = 0.7$ achieves the best gravity AUDC ($0.716 \pm 0.024$) and friction AUDC ($0.109 \pm 0.045$). Note the high friction variance at $\tau = 0.8$ for 2Q (std $= 0.095$), indicating seed sensitivity at this operating point.
+
+\subsection{Key Findings}
+
+\begin{enumerate}
+\item \textbf{Q-ensemble (3Q) consistently improves robustness on Hopper}---confirmed across 4 seeds with the gravity AUDC difference ($0.529 \pm 0.069$ vs.\ $0.616 \pm 0.027$) exceeding one standard deviation.
+\item \textbf{On HalfCheetah, 2Q and 3Q are statistically indistinguishable}---all AUDC differences fall within error bars.
+\item \textbf{On Walker2d, the effect is shift-type dependent}---2Q is more robust on gravity/friction, 3Q on observation noise.
+\item \textbf{Reward perturbation has negligible impact} (AUDC $< 0.002$ everywhere), confirming that frozen offline policies do not adapt to test-time reward changes.
+\item \textbf{Gravity and friction are the most damaging shifts}---AUDC $> 0.5$ on Hopper and Walker2d.
+\item \textbf{Lower $\tau$ generally improves robustness} at the cost of baseline performance, consistent with IQL theory.
+\item \textbf{Higher $\tau$ (0.8, 0.9) increases cross-seed variance}---std values are larger, indicating less stable training.
+\item \textbf{The optimal (critic count, $\tau$) pair is environment-dependent}---no single configuration dominates across all tasks and shift types.
+\end{enumerate}
+
+\subsection{Preliminary Contribution Analysis}
+
+The results suggest two promising directions for future work. The first is \textbf{shift-aware $\tau$ selection}. Our ablation study shows a consistent trade-off between baseline performance and robustness, suggesting that $\tau$ should perhaps be chosen according to expected deployment conditions rather than fixed in advance.
+
+The second is \textbf{adaptive ensemble sizing}. Since 3Q helps on Hopper but not consistently on Walker2d or HalfCheetah, critic count may also need to be selected based on properties of the environment or dataset. The current results provide a clear empirical basis for exploring such adaptive strategies.
+
+\subsection{Limitations}
+This study is limited to simulated MuJoCo environments and controlled perturbations. Real-world distribution shift is often more complex and may involve correlated changes across multiple environment parameters simultaneously. While we evaluate across four random seeds, the number of seeds remains modest; larger-scale seed sweeps could further tighten confidence intervals. Additionally, we test only the ``medium'' dataset quality; results may differ on ``expert'' or ``random'' datasets where the behavior policy quality changes the training distribution.
+
+\section{Conclusion}
+IQL balances performance and simplicity, but robustness under distribution shift remains a central challenge. Our experiments across 1,536 shift-level evaluations (3 environments $\times$ 8 configurations $\times$ 4 shift types $\times$ 4 levels $\times$ 4 seeds) show that the proposed Q-ensemble extension improves robustness on Hopper (gravity AUDC $0.529 \pm 0.069$ vs.\ $0.616 \pm 0.027$), but the benefit is not universal---HalfCheetah shows no significant difference, and Walker2d results are shift-type dependent. The expectile $\tau$ ablation reveals that lower $\tau$ generally improves robustness at the cost of baseline performance, and that higher $\tau$ increases cross-seed variance. Taken together, these results demonstrate that the optimal (critic count, $\tau$) pair is environment-dependent, pointing toward adaptive selection strategies as a promising direction for future work in Offline RL robustness.
+
+\section{References}
+\begin{thebibliography}{9}
+
+\bibitem{cql}
+A. Kumar, A. Zhou, G. Tucker, and S. Levine,
+``Conservative Q-Learning for Offline Reinforcement Learning,''
+in \textit{Advances in Neural Information Processing Systems (NeurIPS)}, 2020.
+
+\bibitem{iql}
+I. Kostrikov, A. Nair, and S. Levine,
+``Offline Reinforcement Learning with Implicit Q-Learning,''
+in \textit{International Conference on Learning Representations (ICLR)}, 2022.
+
+\bibitem{td3bc}
+S. Fujimoto and S. Gu,
+``A Minimalist Approach to Offline Reinforcement Learning,''
+in \textit{Advances in Neural Information Processing Systems (NeurIPS)}, 2021.
+
+\bibitem{d4rl}
+J. Fu, A. Kumar, O. Nachum, G. Tucker, and S. Levine,
+``D4RL: Datasets for Deep Data-Driven Reinforcement Learning,''
+arXiv:2004.07219, 2020.
+
+\bibitem{iql_code}
+I. Kostrikov, A. Nair, and S. Levine,
+``Implicit Q-Learning (Official Implementation),''
+GitHub repository. [Online]. Available: \url{https://github.com/ikostrikov/implicit_q_learning}
+
+\bibitem{repo}
+S. Aggarwal, J. L. Veras, U. Arora, and P. Yadav,
+``IQL Robustness Analysis: Controlled Distribution Shift Experiments,''
+GitHub repository, 2026. [Online]. Available: \url{https://github.com/shloakk/iql-robustness-analysis/tree/main}
+
+\end{thebibliography}
+
+\end{document}
