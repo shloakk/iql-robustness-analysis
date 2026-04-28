@@ -406,9 +406,13 @@ iql-robustness-analysis/
 │   ├── 03_evaluate_shift.ipynb   #   Evaluate under shift
 │   └── 04_analyze_results.ipynb  #   Generate plots and tables
 │
-├── docs/                         # Documentation
+├── docs/                         # Project documentation
 │   ├── EXPERIMENT_GUIDE.md       #   Plain-language experiment explanation
 │   └── DETAILED_RESULTS.md       #   Per-seed results tables & analysis
+│
+├── paper/                        # Academic paper (LaTeX)
+│   ├── main.tex                  #   Full paper source
+│   └── *.pdf                     #   Compiled paper
 │
 ├── results/                      # Experiment outputs (96 shift CSVs + 3 summaries)
 │   ├── shift_{env}_{2Q|3Q}_seed{N}.csv        # Phase 2: shift eval
