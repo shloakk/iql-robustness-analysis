@@ -414,6 +414,10 @@ iql-robustness-analysis/
 │   ├── main.tex                  #   Full paper source
 │   └── *.pdf                     #   Compiled paper
 │
+├── slides/                       # Presentation slides
+│   ├── *.pptx                    #   PowerPoint source
+│   └── *.pdf                     #   Exported PDF
+│
 ├── results/                      # Experiment outputs (96 shift CSVs + 3 summaries)
 │   ├── shift_{env}_{2Q|3Q}_seed{N}.csv        # Phase 2: shift eval
 │   ├── shift_{env}_{2Q|3Q}_seed{N}_tau{τ}.csv # Phase 3: ablation
