@@ -1,5 +1,6 @@
 import collections
 import os
+import pickle
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 
 import flax
@@ -18,7 +19,7 @@ def default_init(scale: Optional[float] = jnp.sqrt(2)):
 
 
 PRNGKey = Any
-Params = flax.core.FrozenDict[str, Any]
+Params = Any  # Works with both FrozenDict and plain dict
 PRNGKey = Any
 Shape = Sequence[int]
 Dtype = Any  # this could be a real type?
@@ -43,14 +44,21 @@ class MLP(nn.Module):
         return x
 
 
-@flax.struct.dataclass
 class Model:
-    step: int
-    apply_fn: nn.Module = flax.struct.field(pytree_node=False)
-    params: Params
-    tx: Optional[optax.GradientTransformation] = flax.struct.field(
-        pytree_node=False)
-    opt_state: Optional[optax.OptState] = None
+    """Trainable model container — JAX pytree compatible.
+
+    Uses manual pytree registration instead of @flax.struct.dataclass
+    for compatibility with JAX 0.4.x through 0.7+ and Flax 0.8 through 0.10+.
+    """
+
+    def __init__(self, step: int, apply_fn: nn.Module, params: Params,
+                 tx: Optional[optax.GradientTransformation] = None,
+                 opt_state: Optional[optax.OptState] = None):
+        self.step = step
+        self.apply_fn = apply_fn      # NOT a pytree leaf (static)
+        self.params = params
+        self.tx = tx                  # NOT a pytree leaf (static)
+        self.opt_state = opt_state
 
     @classmethod
     def create(cls,
@@ -93,12 +101,40 @@ class Model:
                             params=new_params,
                             opt_state=new_opt_state), info
 
+    def replace(self, **kwargs) -> 'Model':
+        return Model(
+            step=kwargs.get('step', self.step),
+            apply_fn=kwargs.get('apply_fn', self.apply_fn),
+            params=kwargs.get('params', self.params),
+            tx=kwargs.get('tx', self.tx),
+            opt_state=kwargs.get('opt_state', self.opt_state),
+        )
+
     def save(self, save_path: str):
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         with open(save_path, 'wb') as f:
-            f.write(flax.serialization.to_bytes(self.params))
+            pickle.dump(jax.device_get(self.params), f)
 
     def load(self, load_path: str) -> 'Model':
         with open(load_path, 'rb') as f:
-            params = flax.serialization.from_bytes(self.params, f.read())
+            params = pickle.load(f)
         return self.replace(params=params)
+
+
+# Register Model as a JAX pytree so it works inside jit/grad/vmap
+def _model_flatten(model):
+    # Children (traced by JAX): step, params, opt_state
+    children = (model.step, model.params, model.opt_state)
+    # Aux data (static, not traced): apply_fn, tx
+    aux = (model.apply_fn, model.tx)
+    return children, aux
+
+
+def _model_unflatten(aux, children):
+    step, params, opt_state = children
+    apply_fn, tx = aux
+    return Model(step=step, apply_fn=apply_fn, params=params,
+                 tx=tx, opt_state=opt_state)
+
+
+jax.tree_util.register_pytree_node(Model, _model_flatten, _model_unflatten)

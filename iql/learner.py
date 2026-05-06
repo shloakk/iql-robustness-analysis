@@ -15,8 +15,12 @@ from iql.common import Batch, InfoDict, Model, PRNGKey
 from iql.critic import update_q, update_v
 
 
+# Compat shim: jax.tree_map deprecated in JAX 0.7+
+_tree_map = getattr(jax.tree, 'map', None) or jax.tree_map
+
+
 def target_update(critic: Model, target_critic: Model, tau: float) -> Model:
-    new_target_params = jax.tree_map(
+    new_target_params = _tree_map(
         lambda p, tp: p * tau + tp * (1 - tau), critic.params,
         target_critic.params)
 

@@ -117,4 +117,4 @@ var/
 venv.bak/
 venv/
 wheels/
-.idea
+.idea.venv310/

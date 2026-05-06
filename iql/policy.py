@@ -5,6 +5,16 @@ import flax.linen as nn
 import jax
 import jax.numpy as jnp
 import numpy as np
+
+# ── JAX 0.7+ compatibility shim for TFP ──────────────────────────
+# TFP 0.25.0 accesses jax.interpreters.xla.pytype_aval_mappings at
+# import time, but that attribute was removed in JAX 0.7.  Patch it
+# back so the import succeeds.  The replacement lives in jax.core.
+import jax.interpreters.xla as _xla
+if not hasattr(_xla, 'pytype_aval_mappings'):
+    _xla.pytype_aval_mappings = jax.core.pytype_aval_mappings
+# ──────────────────────────────────────────────────────────────────
+
 from tensorflow_probability.substrates import jax as tfp
 
 tfd = tfp.distributions
