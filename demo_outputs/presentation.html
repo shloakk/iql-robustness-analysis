@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IQL Robustness — Video Demo Presentation</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #242836;
+      --accent: #6c63ff;
+      --accent-light: #8b83ff;
+      --text: #e4e4e7;
+      --text-muted: #9ca3af;
+      --green: #34d399;
+      --orange: #fb923c;
+      --red: #f87171;
+      --blue: #60a5fa;
+      --radius: 12px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%);
+      padding: 3rem 2rem;
+      text-align: center;
+      border-bottom: 2px solid var(--accent);
+    }
+    header h1 {
+      font-size: 2.2rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(90deg, #c4b5fd, #818cf8, #6366f1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    header p {
+      color: var(--text-muted);
+      font-size: 1.05rem;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+    header .meta {
+      margin-top: 1rem;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    /* ── Navigation ── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(15, 17, 23, 0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--surface2);
+      padding: 0.75rem 2rem;
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    nav a {
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 0.5rem 1.2rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    nav a:hover, nav a.active {
+      background: var(--surface2);
+      color: var(--accent-light);
+    }
+
+    /* ── Main ── */
+    main {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    /* ── Section ── */
+    .section {
+      margin-bottom: 3.5rem;
+    }
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 2px solid var(--surface2);
+    }
+    .section-header .icon {
+      font-size: 1.8rem;
+    }
+    .section-header h2 {
+      font-size: 1.6rem;
+      font-weight: 700;
+    }
+    .section-header .badge {
+      margin-left: auto;
+      background: var(--surface2);
+      color: var(--text-muted);
+      padding: 0.3rem 0.8rem;
+      border-radius: 20px;
+      font-size: 0.8rem;
+    }
+
+    /* ── Video Grid ── */
+    .video-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+    }
+    .video-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      overflow: hidden;
+      border: 1px solid var(--surface2);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .video-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+    }
+    .video-card video {
+      width: 100%;
+      display: block;
+      background: #000;
+    }
+    .video-card .info {
+      padding: 1rem 1.2rem;
+    }
+    .video-card .info h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 0.3rem;
+    }
+    .video-card .info p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .video-card .tag {
+      display: inline-block;
+      padding: 0.15rem 0.6rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-right: 0.4rem;
+      margin-bottom: 0.3rem;
+    }
+    .tag-baseline { background: rgba(52,211,153,0.15); color: var(--green); }
+    .tag-friction { background: rgba(251,146,60,0.15); color: var(--orange); }
+    .tag-gravity  { background: rgba(248,113,113,0.15); color: var(--red); }
+    .tag-noise    { background: rgba(96,165,250,0.15); color: var(--blue); }
+
+    /* ── Comparison Row ── */
+    .comparison-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    @media (max-width: 900px) {
+      .comparison-row { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 500px) {
+      .comparison-row { grid-template-columns: 1fr; }
+    }
+
+    /* ── Plots Section ── */
+    .plot-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+      gap: 1.5rem;
+    }
+    .plot-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      overflow: hidden;
+      border: 1px solid var(--surface2);
+      transition: transform 0.2s;
+    }
+    .plot-card:hover {
+      transform: translateY(-2px);
+    }
+    .plot-card img {
+      width: 100%;
+      display: block;
+    }
+    .plot-card .info {
+      padding: 0.8rem 1.2rem;
+    }
+    .plot-card .info h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    /* ── Play All Controls ── */
+    .controls {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .btn {
+      padding: 0.6rem 1.4rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+    .btn-primary:hover {
+      background: var(--accent-light);
+    }
+    .btn-secondary {
+      background: var(--surface2);
+      color: var(--text);
+    }
+    .btn-secondary:hover {
+      background: #333850;
+    }
+
+    /* ── Key Findings ── */
+    .findings {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.2rem;
+      margin-top: 1.5rem;
+    }
+    .finding-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      border: 1px solid var(--surface2);
+      border-left: 4px solid var(--accent);
+    }
+    .finding-card h4 {
+      font-size: 0.95rem;
+      margin-bottom: 0.5rem;
+      color: var(--accent-light);
+    }
+    .finding-card p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 2rem;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      border-top: 1px solid var(--surface2);
+      margin-top: 2rem;
+    }
+
+    /* ── Fullscreen overlay ── */
+    .overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      background: rgba(0,0,0,0.92);
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+    }
+    .overlay.active { display: flex; }
+    .overlay video {
+      max-width: 90vw;
+      max-height: 85vh;
+      border-radius: 8px;
+    }
+    .overlay .close-hint {
+      position: absolute;
+      top: 1.5rem;
+      right: 2rem;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Fullscreen overlay -->
+  <div class="overlay" id="overlay" onclick="closeOverlay()">
+    <span class="close-hint">Click anywhere or press Esc to close</span>
+    <video id="overlayVideo" controls></video>
+  </div>
+
+  <header>
+    <h1>🤖 Robustness of Implicit Q-Learning Under Distribution Shift</h1>
+    <p>Video demonstrations of IQL agents (2Q DoubleCritic) under four environment conditions across three MuJoCo locomotion tasks.</p>
+    <div class="meta">CMPE 260 — Reinforcement Learning &nbsp;|&nbsp; San José State University &nbsp;|&nbsp; Group 6</div>
+  </header>
+
+  <nav>
+    <a href="#overview">Overview</a>
+    <a href="#halfcheetah">HalfCheetah</a>
+    <a href="#hopper">Hopper</a>
+    <a href="#walker2d">Walker2d</a>
+    <a href="#side-by-side">Side-by-Side</a>
+    <a href="#plots">Result Plots</a>
+    <a href="#findings">Key Findings</a>
+  </nav>
+
+  <main>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- OVERVIEW -->
+    <!-- ════════════════════════════════════════════ -->
+    <section class="section" id="overview">
+      <div class="section-header">
+        <span class="icon">📋</span>
+        <h2>Experiment Overview</h2>
+      </div>
+      <div class="findings">
+        <div class="finding-card">
+          <h4>🎯 Baseline</h4>
+          <p>Original MuJoCo environment — no perturbations. This is the control condition showing the agent's learned behavior under training-matched dynamics.</p>
+        </div>
+        <div class="finding-card">
+          <h4>🧊 Friction ×0.5</h4>
+          <p>Ground friction halved — simulates icy or slippery surfaces. Tests robustness to contact dynamics changes.</p>
+        </div>
+        <div class="finding-card">
+          <h4>🪐 Gravity ×2</h4>
+          <p>Gravitational acceleration doubled — simulates a heavier planet. Tests robustness to fundamental physics changes.</p>
+        </div>
+        <div class="finding-card">
+          <h4>📡 Noise σ=0.3</h4>
+          <p>Gaussian noise (σ=0.3) added to observations — simulates sensor degradation. Tests robustness to observation corruption.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- HALFCHEETAH -->
+    <!-- ════════════════════════════════════════════ -->
+    <section class="section" id="halfcheetah">
+      <div class="section-header">
+        <span class="icon">🐆</span>
+        <h2>HalfCheetah</h2>
+        <span class="badge">4 videos</span>
+      </div>
+      <div class="controls">
+        <button class="btn btn-primary" onclick="playAll('halfcheetah')">▶ Play All</button>
+        <button class="btn btn-secondary" onclick="pauseAll('halfcheetah')">⏸ Pause All</button>
+        <button class="btn btn-secondary" onclick="restartAll('halfcheetah')">⟲ Restart All</button>
+      </div>
+      <div class="video-grid comparison-row" data-group="halfcheetah">
+        <div class="video-card">
+          <video src="videos/halfcheetah_2Q_baseline.mp4" controls loop muted preload="metadata" ondblclick="openOverlay(this)"></video>
+          <div class="info">
+            <span class="tag tag-baseline">BASELINE</span>
+            <h3>HalfCheetah — Baseline</h3>
+            <p>Standard dynamics. Smooth forward locomotion gait.</p>
+          </div>
+        </div>
+        <div class="video-card">
+          <video src="videos/halfcheetah_2Q_friction0.5.mp4" controls loop muted preload="metadata" ondblclick="openOverlay(this)"></video>
+          <div class="info">
+            <span class="tag tag-friction">FRICTION ×0.5</span>
+            <h3>HalfCheetah — Low Friction</h3>
+            <p>Halved friction. Watch for sliding and gait instability.</p>
+          </div>
+        </div>
+        <div class="video-card">
+          <video src="videos/halfcheetah_2Q_gravity2x.mp4" controls loop muted preload="metadata" ondblclick="openOverlay(this)"></video>
+          <div class="info">
+            <span class="tag tag-gravity">GRAVITY ×2</span>
+            <h3>HalfCheetah — Double Gravity</h3>
+            <p>Doubled gravity. Agent struggles with heavier body dynamics.</p>
+          </div>
+        </div>
+        <div class="video-card">
+          <video src="videos/halfcheetah_2Q_noise0.3.mp4" controls loop muted preload="metadata" ondblclick="openOverlay(this)"></video>
+          <div class="info">
+            <span class="tag tag-noise">NOISE σ=0.3</span>
+            <h3>HalfCheetah — Observation Noise</h3>
+            <p>Noisy observations. Jittery actions from corrupted state estimates.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- HOPPER -->
+    <!-- ════════════════════════════════════════════ -->
+    <section class="section" id="hopper">
+      <div class="section-header">
+        <span class="icon">🦘</span>
+        <h2>Hopper</h2>
+        <span class="badge">4 videos</span>
+      </div>
+      <div class="controls">
+        <button class="btn btn-primary" onclick="playAll('hopper')">▶ Play All</button>
+        <button class="btn btn-secondary" onclick="pauseAll('hopper')">⏸ Pause All</button>
+        <button class="btn btn-secondary" onclick="restartAll('hopper')">⟲ Restart All</button>
+      </div>
+      <div class="video-grid comparison-row" data-group="hopper">
+        <div class="video-card">
+          <video src="videos/hopper_2Q_baseline.mp4" controls loop muted preload="metadata" ondblclick="openOverlay(this)"></video>
+          <div class="info">
+            <span class="tag tag-baseline">BASELINE</span>
+            <h3>Hopper — Baseline</h3>
+            <p>Standard dynamics. Stable hopping gait.</p>
+          </div>
+        </div>
+        <div class="video-card">
+          <video src="videos/hopper_2Q_friction0.5.mp4" controls loop muted preload="metadata" ondblclick="openOverlay(this)"></video>
+          <div class="info">
+            <span class="tag tag-friction">FRICTION ×0.5</span>
+            <h3>Hopper — Low Friction</h3>
+            <p>Halved friction. Hopper may slip on landing.</p>
+          </div>
+        </div>
+        <div class="video-card">
+          <video src="videos/hopper_2Q_gravity2x.mp4" controls loop muted preload="metadata" ondblclick="openOverlay(this)"></video>
+          <div class="info">
+            <span class="tag tag-gravity">GRAVITY ×2</span>
+            <h3>Hopper — Double Gravity</h3>
+            <p>Doubled gravity. Hopper can't achieve sufficient jump height.</p>
+          </div>
+        </div>
+        <div class="video-card">
+          <video src="videos/hopper_2Q_noise0.3.mp4" controls loop muted preload="metadata" ondblclick="openOverlay(this)"></video>
+          <div class="info">
+            <span class="tag tag-noise">NOISE σ=0.3</span>
+            <h3>Hopper — Observation Noise</h3>
+            <p>Noisy observations. Balance disrupted by corrupted state.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- WALKER2D -->
+    <!-- ════════════════════════════════════════════ -->
+    <section class="section" id="walker2d">
+      <div class="section-header">
+        <span class="icon">🚶</span>
+        <h2>Walker2d</h2>
+        <span class="badge">4 videos</span>
+      </div>
+      <div class="controls">
+        <button class="btn btn-primary" onclick="playAll('walker2d')">▶ Play All</button>
+        <button class="btn btn-secondary" onclick="pauseAll('walker2d')">⏸ Pause All</button>
+        <button class="btn btn-secondary" onclick="restartAll('walker2d')">⟲ Restart All</button>
+      </div>
+      <div class="video-grid comparison-row" data-group="walker2d">
+        <div class="video-card">
+          <video src="videos/walker2d_2Q_baseline.mp4" controls loop muted preload="metadata" ondblclick="openOverlay(this)"></video>
+          <div class="info">
+            <span class="tag tag-baseline">BASELINE</span>
+            <h3>Walker2d — Baseline</h3>
+            <p>Standard dynamics. Bipedal walking gait.</p>
+          </div>
+        </div>
+        <div class="video-card">
+          <video src="videos/walker2d_2Q_friction0.5.mp4" controls loop muted preload="metadata" ondblclick="openOverlay(this)"></video>
+          <div class="info">
+            <span class="tag tag-friction">FRICTION ×0.5</span>
+            <h3>Walker2d — Low Friction</h3>
+            <p>Halved friction. Feet slide, balance compromised.</p>
+          </div>
+        </div>
+        <div class="video-card">
+          <video src="videos/walker2d_2Q_gravity2x.mp4" controls loop muted preload="metadata" ondblclick="openOverlay(this)"></video>
+          <div class="info">
+            <span class="tag tag-gravity">GRAVITY ×2</span>
+            <h3>Walker2d — Double Gravity</h3>
+            <p>Doubled gravity. Walker struggles to maintain upright posture.</p>
+          </div>
+        </div>
+        <div class="video-card">
+          <video src="videos/walker2d_2Q_noise0.3.mp4" controls loop muted preload="metadata" ondblclick="openOverlay(this)"></video>
+          <div class="info">
+            <span class="tag tag-noise">NOISE σ=0.3</span>
+            <h3>Walker2d — Observation Noise</h3>
+            <p>Noisy observations. Erratic movements from corrupted inputs.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- SIDE-BY-SIDE -->
+    <!-- ════════════════════════════════════════════ -->
+    <section class="section" id="side-by-side">
+      <div class="section-header">
+        <span class="icon">⚖️</span>
+        <h2>Side-by-Side Comparison</h2>
+        <span class="badge">Compare across environments</span>
+      </div>
+      <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
+        Select a shift type to compare how each environment responds to the same perturbation.
+      </p>
+      <div class="controls">
+        <button class="btn btn-primary" onclick="showComparison('baseline')" id="cmp-baseline">Baseline</button>
+        <button class="btn btn-secondary" onclick="showComparison('friction0.5')" id="cmp-friction0.5">Friction ×0.5</button>
+        <button class="btn btn-secondary" onclick="showComparison('gravity2x')" id="cmp-gravity2x">Gravity ×2</button>
+        <button class="btn btn-secondary" onclick="showComparison('noise0.3')" id="cmp-noise0.3">Noise σ=0.3</button>
+        <button class="btn btn-secondary" style="margin-left: auto;" onclick="playAllComparison()">▶ Play All</button>
+      </div>
+      <div class="video-grid" id="comparison-grid" style="grid-template-columns: repeat(3, 1fr);">
+        <!-- Populated by JS -->
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- PLOTS -->
+    <!-- ════════════════════════════════════════════ -->
+    <section class="section" id="plots">
+      <div class="section-header">
+        <span class="icon">📊</span>
+        <h2>Result Plots</h2>
+        <span class="badge">12 plots</span>
+      </div>
+
+      <h3 style="margin: 1.5rem 0 1rem; color: var(--accent-light);">Training Curves</h3>
+      <div class="plot-grid">
+        <div class="plot-card">
+          <img src="plots/training_curves_halfcheetah.png" alt="Training Curves — HalfCheetah" loading="lazy">
+          <div class="info"><h3>HalfCheetah — Training Curves</h3></div>
+        </div>
+        <div class="plot-card">
+          <img src="plots/training_curves_hopper.png" alt="Training Curves — Hopper" loading="lazy">
+          <div class="info"><h3>Hopper — Training Curves</h3></div>
+        </div>
+        <div class="plot-card">
+          <img src="plots/training_curves_walker2d.png" alt="Training Curves — Walker2d" loading="lazy">
+          <div class="info"><h3>Walker2d — Training Curves</h3></div>
+        </div>
+      </div>
+
+      <h3 style="margin: 2rem 0 1rem; color: var(--accent-light);">Degradation Curves</h3>
+      <div class="plot-grid">
+        <div class="plot-card">
+          <img src="plots/degradation_curves_halfcheetah.png" alt="Degradation — HalfCheetah" loading="lazy">
+          <div class="info"><h3>HalfCheetah — Degradation Under Shift</h3></div>
+        </div>
+        <div class="plot-card">
+          <img src="plots/degradation_curves_hopper.png" alt="Degradation — Hopper" loading="lazy">
+          <div class="info"><h3>Hopper — Degradation Under Shift</h3></div>
+        </div>
+        <div class="plot-card">
+          <img src="plots/degradation_curves_walker2d.png" alt="Degradation — Walker2d" loading="lazy">
+          <div class="info"><h3>Walker2d — Degradation Under Shift</h3></div>
+        </div>
+      </div>
+
+      <h3 style="margin: 2rem 0 1rem; color: var(--accent-light);">Robustness Drop (2Q vs 3Q)</h3>
+      <div class="plot-grid">
+        <div class="plot-card">
+          <img src="plots/robustness_drop_bars_halfcheetah.png" alt="Robustness Drop — HalfCheetah" loading="lazy">
+          <div class="info"><h3>HalfCheetah — Robustness Drop Bars</h3></div>
+        </div>
+        <div class="plot-card">
+          <img src="plots/robustness_drop_bars_hopper.png" alt="Robustness Drop — Hopper" loading="lazy">
+          <div class="info"><h3>Hopper — Robustness Drop Bars</h3></div>
+        </div>
+        <div class="plot-card">
+          <img src="plots/robustness_drop_bars_walker2d.png" alt="Robustness Drop — Walker2d" loading="lazy">
+          <div class="info"><h3>Walker2d — Robustness Drop Bars</h3></div>
+        </div>
+      </div>
+
+      <h3 style="margin: 2rem 0 1rem; color: var(--accent-light);">Demo vs Production Comparison</h3>
+      <div class="plot-grid">
+        <div class="plot-card">
+          <img src="plots/demo_vs_production_halfcheetah.png" alt="Demo vs Production — HalfCheetah" loading="lazy">
+          <div class="info"><h3>HalfCheetah — Demo vs Production</h3></div>
+        </div>
+        <div class="plot-card">
+          <img src="plots/demo_vs_production_hopper.png" alt="Demo vs Production — Hopper" loading="lazy">
+          <div class="info"><h3>Hopper — Demo vs Production</h3></div>
+        </div>
+        <div class="plot-card">
+          <img src="plots/demo_vs_production_walker2d.png" alt="Demo vs Production — Walker2d" loading="lazy">
+          <div class="info"><h3>Walker2d — Demo vs Production</h3></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- KEY FINDINGS -->
+    <!-- ════════════════════════════════════════════ -->
+    <section class="section" id="findings">
+      <div class="section-header">
+        <span class="icon">🔬</span>
+        <h2>Key Findings</h2>
+      </div>
+      <div class="findings">
+        <div class="finding-card">
+          <h4>📉 Gravity is the Hardest Shift</h4>
+          <p>Doubling gravity causes the largest performance drops across all environments. Hopper is especially vulnerable — it often falls immediately under 2× gravity.</p>
+        </div>
+        <div class="finding-card">
+          <h4>🧊 Friction Shift is Environment-Dependent</h4>
+          <p>HalfCheetah handles low friction relatively well due to its stable body plan. Hopper and Walker2d degrade more because balance depends on ground contact.</p>
+        </div>
+        <div class="finding-card">
+          <h4>📡 Observation Noise Degrades Gracefully</h4>
+          <p>σ=0.3 noise causes visible jitter but agents often maintain forward progress. The policy's implicit averaging over noisy inputs provides some natural robustness.</p>
+        </div>
+        <div class="finding-card">
+          <h4>🔢 TripleCritic (3Q) Helps Under Shift</h4>
+          <p>The 3Q variant shows smaller performance drops under distribution shift, especially for gravity and friction perturbations. The more conservative Q-estimates provide a safety margin.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <p>IQL Robustness Analysis — CMPE 260 Group 6 &nbsp;|&nbsp; Videos recorded with MuJoCo via D4RL environments</p>
+    <p style="margin-top: 0.3rem;">Double-click any video to view fullscreen &nbsp;|&nbsp; All videos use 2Q (DoubleCritic) agents</p>
+  </footer>
+
+  <script>
+    // ── Play / Pause / Restart controls ──
+    function getVideos(group) {
+      return document.querySelectorAll(`[data-group="${group}"] video`);
+    }
+    function playAll(group) {
+      getVideos(group).forEach(v => v.play());
+    }
+    function pauseAll(group) {
+      getVideos(group).forEach(v => v.pause());
+    }
+    function restartAll(group) {
+      getVideos(group).forEach(v => { v.currentTime = 0; v.play(); });
+    }
+
+    // ── Fullscreen overlay ──
+    function openOverlay(videoEl) {
+      const overlay = document.getElementById('overlay');
+      const overlayVideo = document.getElementById('overlayVideo');
+      overlayVideo.src = videoEl.src;
+      overlay.classList.add('active');
+      overlayVideo.play();
+    }
+    function closeOverlay() {
+      const overlay = document.getElementById('overlay');
+      const overlayVideo = document.getElementById('overlayVideo');
+      overlayVideo.pause();
+      overlayVideo.src = '';
+      overlay.classList.remove('active');
+    }
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') closeOverlay();
+    });
+
+    // ── Side-by-side comparison ──
+    const envs = ['halfcheetah', 'hopper', 'walker2d'];
+    const envLabels = { halfcheetah: '🐆 HalfCheetah', hopper: '🦘 Hopper', walker2d: '🚶 Walker2d' };
+    const shiftLabels = {
+      baseline: 'Baseline',
+      'friction0.5': 'Friction ×0.5',
+      gravity2x: 'Gravity ×2',
+      'noise0.3': 'Noise σ=0.3'
+    };
+    const shiftTags = {
+      baseline: 'tag-baseline',
+      'friction0.5': 'tag-friction',
+      gravity2x: 'tag-gravity',
+      'noise0.3': 'tag-noise'
+    };
+
+    let currentComparison = 'baseline';
+
+    function showComparison(shift) {
+      currentComparison = shift;
+      const grid = document.getElementById('comparison-grid');
+      grid.innerHTML = '';
+
+      // Update button styles
+      document.querySelectorAll('[id^="cmp-"]').forEach(btn => {
+        btn.className = btn.id === `cmp-${shift}` ? 'btn btn-primary' : 'btn btn-secondary';
+      });
+
+      envs.forEach(env => {
+        const card = document.createElement('div');
+        card.className = 'video-card';
+        card.innerHTML = `
+          <video src="videos/${env}_2Q_${shift}.mp4" controls loop muted preload="metadata"
+                 ondblclick="openOverlay(this)" class="comparison-video"></video>
+          <div class="info">
+            <span class="tag ${shiftTags[shift]}">${shiftLabels[shift].toUpperCase()}</span>
+            <h3>${envLabels[env]}</h3>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function playAllComparison() {
+      document.querySelectorAll('.comparison-video').forEach(v => {
+        v.currentTime = 0;
+        v.play();
+      });
+    }
+
+    // Initialize with baseline
+    showComparison('baseline');
+
+    // ── Smooth scroll for nav ──
+    document.querySelectorAll('nav a').forEach(link => {
+      link.addEventListener('click', e => {
+        e.preventDefault();
+        const target = document.querySelector(link.getAttribute('href'));
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+
+    // ── Highlight active nav on scroll ──
+    const sections = document.querySelectorAll('.section');
+    const navLinks = document.querySelectorAll('nav a');
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          navLinks.forEach(l => l.classList.remove('active'));
+          const active = document.querySelector(`nav a[href="#${entry.target.id}"]`);
+          if (active) active.classList.add('active');
+        }
+      });
+    }, { threshold: 0.3 });
+    sections.forEach(s => observer.observe(s));
+  </script>
+</body>
+</html>
