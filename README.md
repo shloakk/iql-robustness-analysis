@@ -401,10 +401,10 @@ iql-robustness-analysis/
 │   └── run_all_hpc.sh            #   Submit all experiments to SLURM
 │
 ├── notebooks/                    # Jupyter notebooks
-│   ├── 01_train_baseline.ipynb   #   Train 2Q on all envs
-│   ├── 02_train_ensemble.ipynb   #   Train 3Q on all envs
-│   ├── 03_evaluate_shift.ipynb   #   Evaluate under shift
-│   └── 04_analyze_results.ipynb  #   Generate plots and tables
+│   ├── 01_train.ipynb            #   Train 2Q on all envs
+│   ├── 02_evaluate_shift.ipynb   #   Evaluate under shift
+│   ├── 03_analyze_results.ipynb  #   Generate plots and tables
+│   └── 04_live_demo.ipynb        #   Self-contained Colab demo
 │
 ├── docs/                         # Project documentation
 │   ├── EXPERIMENT_GUIDE.md       #   Plain-language experiment explanation
@@ -551,29 +551,36 @@ The self-contained demo notebook trains IQL agents, evaluates robustness under d
 
 ### Demo Outputs
 
-After running the notebook, you get:
+After running the notebook, you get 12 videos, 12 plots, and 12 CSVs in [`demo_outputs/`](demo_outputs/README.md).
 
 #### Training Curves (2Q vs 3Q)
 Shows learning progress for DoubleCritic (2Q) vs TripleCritic (3Q) across all environments:
 
-![Training Curves](results/results_comparison.png)
+| Environment | Training Curves |
+|-------------|-----------------|
+| HalfCheetah | ![Training Curves — HalfCheetah](demo_outputs/plots/training_curves_halfcheetah.png) |
+| Hopper | ![Training Curves — Hopper](demo_outputs/plots/training_curves_hopper.png) |
+| Walker2d | ![Training Curves — Walker2d](demo_outputs/plots/training_curves_walker2d.png) |
 
 #### Distribution Shift Analysis
-Performance degradation under gravity shift and observation noise:
+Performance degradation under gravity, friction, and observation noise shifts:
 
-![Shift Comparison](results/results_shift_comparison.png)
+| Environment | Degradation Curves | Robustness Drop | Demo vs Production |
+|-------------|--------------------|-----------------|--------------------|
+| HalfCheetah | ![](demo_outputs/plots/degradation_curves_halfcheetah.png) | ![](demo_outputs/plots/robustness_drop_bars_halfcheetah.png) | ![](demo_outputs/plots/demo_vs_production_halfcheetah.png) |
+| Hopper | ![](demo_outputs/plots/degradation_curves_hopper.png) | ![](demo_outputs/plots/robustness_drop_bars_hopper.png) | ![](demo_outputs/plots/demo_vs_production_hopper.png) |
+| Walker2d | ![](demo_outputs/plots/degradation_curves_walker2d.png) | ![](demo_outputs/plots/robustness_drop_bars_walker2d.png) | ![](demo_outputs/plots/demo_vs_production_walker2d.png) |
 
 #### Agent Videos
-MuJoCo recordings showing trained agents under normal and shifted conditions:
+MuJoCo recordings showing trained 2Q agents under normal and shifted conditions (4 conditions × 3 environments = 12 videos):
 
-| Condition | Description |
-|-----------|-------------|
-| Baseline | Agent performing under normal physics |
-| 2x Gravity | Agent struggling with doubled gravity |
-| Noise σ=0.3 | Agent with noisy sensor readings |
-| 0.5x Friction | Agent on slippery surface |
+| Environment | Baseline | 2× Gravity | Noise σ=0.3 | 0.5× Friction |
+|-------------|----------|------------|-------------|----------------|
+| HalfCheetah | [▶ baseline](demo_outputs/videos/halfcheetah_2Q_baseline.mp4) | [▶ gravity2x](demo_outputs/videos/halfcheetah_2Q_gravity2x.mp4) | [▶ noise0.3](demo_outputs/videos/halfcheetah_2Q_noise0.3.mp4) | [▶ friction0.5](demo_outputs/videos/halfcheetah_2Q_friction0.5.mp4) |
+| Hopper | [▶ baseline](demo_outputs/videos/hopper_2Q_baseline.mp4) | [▶ gravity2x](demo_outputs/videos/hopper_2Q_gravity2x.mp4) | [▶ noise0.3](demo_outputs/videos/hopper_2Q_noise0.3.mp4) | [▶ friction0.5](demo_outputs/videos/hopper_2Q_friction0.5.mp4) |
+| Walker2d | [▶ baseline](demo_outputs/videos/walker2d_2Q_baseline.mp4) | [▶ gravity2x](demo_outputs/videos/walker2d_2Q_gravity2x.mp4) | [▶ noise0.3](demo_outputs/videos/walker2d_2Q_noise0.3.mp4) | [▶ friction0.5](demo_outputs/videos/walker2d_2Q_friction0.5.mp4) |
 
-Videos are saved to `demo_outputs/videos/` after running the notebook.
+> **Note:** GitHub doesn't render MP4 inline — click the links to download and view locally, or clone the repo and open them with any video player.
 
 ### Pre-computed Results
 
