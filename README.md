@@ -536,6 +536,59 @@ python scripts/compute_robustness.py --results_dir=results/ --env_name=hopper-me
 
 ---
 
+## Demo & Class Presentation
+
+### Quick Start — Run the Demo Notebook
+
+The self-contained demo notebook trains IQL agents, evaluates robustness under distribution shift, and records MuJoCo agent videos:
+
+```bash
+# Open directly in Google Colab:
+# https://colab.research.google.com/github/shloakk/iql-robustness-analysis/blob/demo-notebook-colab/notebooks/04_live_demo.ipynb
+```
+
+**Runtime:** ~2-3 hours on Colab T4 GPU (300k training steps × 6 models)
+
+### Demo Outputs
+
+After running the notebook, you get:
+
+#### Training Curves (2Q vs 3Q)
+Shows learning progress for DoubleCritic (2Q) vs TripleCritic (3Q) across all environments:
+
+![Training Curves](results/results_comparison.png)
+
+#### Distribution Shift Analysis
+Performance degradation under gravity shift and observation noise:
+
+![Shift Comparison](results/results_shift_comparison.png)
+
+#### Agent Videos
+MuJoCo recordings showing trained agents under normal and shifted conditions:
+
+| Condition | Description |
+|-----------|-------------|
+| Baseline | Agent performing under normal physics |
+| 2x Gravity | Agent struggling with doubled gravity |
+| Noise σ=0.3 | Agent with noisy sensor readings |
+| 0.5x Friction | Agent on slippery surface |
+
+Videos are saved to `demo_outputs/videos/` after running the notebook.
+
+### Pre-computed Results
+
+If you don't want to run the full training, pre-computed results from 300k-step training (4 seeds × 8 configs × 3 environments = 96 evaluations) are available in the `results/` directory:
+
+| File | Description |
+|------|-------------|
+| `results/shift_{env}_{nQ}_seed{s}.csv` | Per-seed shift evaluation results |
+| `results/summary_{env}.csv` | Multi-seed AUDC statistics |
+| `results/detailed_per_seed.csv` | All AUDC values across seeds |
+| `results/results_comparison.png` | Training curve comparison plot |
+| `results/results_shift_comparison.png` | Shift degradation comparison plot |
+
+---
+
 ## References
 
 1. Kostrikov, I., Nair, A., & Levine, S. (2022). *Offline Reinforcement Learning with Implicit Q-Learning*. ICLR. [arXiv:2110.06169](https://arxiv.org/abs/2110.06169)
